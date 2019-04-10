@@ -91,6 +91,65 @@ void mstSecuencial(Grafo *g){
   arbol.imprimirGrafo();
 }
 
+/////////////////////////////////////////////////////////////////7
+//////////////////////////////////////////////////////////////////
+//////////////////NUESTRO CODIGO//////////////////////////////////
+/////////////////////////////////////////////////////////////////
+
+void *ThreadCicle(void* CambiarNOmbreQuePonemosAca){
+
+	//Selecciono un nodo al azar del grafo para empezar
+	int nodoActual = rand() % g->numVertices;
+	//ojo que esto no se si no va a hacer que todos los threads empiecen igual
+
+
+}
+
+
+
+?? Merge(?? (int threadid1(el que llamó), threadid2(el otro), algo más?)){
+
+}
+
+
+
+void mstParalelo(Grafo *g, int cantThreads) {
+	//Imprimo el grafo
+	g->imprimirGrafo();
+
+	//INICIALIZO EL GRAFO CENTRAL COMPARTIDO
+	//Semilla random
+	srand(time(0));
+	//Arbol resultado
+	Grafo arbol;
+
+	
+	//ESTO HAY QUE VER SI LO QUEREMOS ANTES DE LANZAR LOS THREADS O QUE
+	//Por ahora no colorié ninguno de los nodos
+	colores.assign(g->numVertices,BLANCO);
+	//Por ahora no calculé ninguna distancia
+	distancia.assign(g->numVertices,IMAX);
+	distanciaNodo.assign(g->numVertices,-1);
+
+
+	//LANZAR LOS THREADS
+
+
+	//ESPERAR A QUE LOS THREADS MUERAN
+
+
+	//podríamos agregar que imprima el tiempo que tardó para medirlo,
+	//o que lo guarde en algún archivo junto con el tamaño del grafo
+	//y cosas así
+	cout << endl << "== RESULTADO == " << endl;
+ 	arbol.imprimirGrafo();
+}
+
+/////////////////////////////////////////////////////////////////7
+//////////////////////////////////////////////////////////////////
+//////////////////NUESTRO CODIGO//////////////////////////////////
+/////////////////////////////////////////////////////////////////
+
 int main(int argc, char const * argv[]) {
 
   if(argc <= 1){
