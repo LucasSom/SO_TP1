@@ -44,6 +44,11 @@ vector<vector <int> > distanciaNodoParal;
 //pidió un merge
 //vector< COLAS<mutex> > colasEspera
 
+
+//el arbol resultado que solo modifica el thread que no le quedan
+//nodos que agregar (o sea que es el último)
+Grafo* arbolRta;
+
 vector<Arbol> arbolesGenerados;
 
 //acá van a estar las direcciones de los threads para poder crear y borrarlos
@@ -156,18 +161,18 @@ void *ThreadCicle(void* inThread){
 	int miTid = input.threadId;
 
 	//Arbol propio
-	Grafo arbolMio = arbolesGenerados[miTid];
+	Grafo* arbolMio = &(arbolesGenerados[miTid]);
 
 	//ESTE CICLO ESTA COPIADO ASI NOMAS DEL SECUENCIAL, CHEQUEARLO
 	for(int i = 0; i < g->numVertices; i++){
 
 		//ACA HAY QUE AGREGAR QUE CHEQUEE SU COLA A VER SI HAY QUE MERGEAR
 
-		arbolMio.numVertices += 1;
+		arbolMio->numVertices += 1;
 
 		//La primera vez no lo agrego porque necesito dos nodos para unir
 		if(i > 0){
-		  arbolMio.insertarEje(nodoActual,distanciaNodo[miTid][nodoActual],distancia[miTid][nodoActual]);
+		  arbolMio->insertarEje(nodoActual,distanciaNodo[miTid][nodoActual],distancia[miTid][nodoActual]);
 		}
 
 		//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
@@ -201,10 +206,6 @@ void mstParalelo(Grafo *g, int cantThreads) {
 
 	//Semilla random
 	srand(time(0));
-
-	//el arbol resultado que solo modifica el thread que no le quedan
-	//nodos que agregar (o sea que es el último)
-	Grafo arbolRta;
 
 	//Por ahora no colorié ninguno de los nodos
 	colores.assign(g->numVertices,BLANCO);
@@ -251,7 +252,7 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	//que lo sabe porque no le quedan nodos que agregar debería guardar
 	//su arbol en un arbolRta compartido
 	cout << endl << "== RESULTADO == " << endl;
- 	arbolRta.imprimirGrafo();
+ 	arbolRta->imprimirGrafo();
 }
 
 /////////////////////////////////////////////////////////////////7
