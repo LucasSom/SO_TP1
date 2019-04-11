@@ -40,6 +40,14 @@ int IMAX = numeric_limits<int>::max();
 vector<vector <int> > distanciaParal;
 vector<vector <int> > distanciaNodoParal;
 
+//colasEspera[i] es la cola de mutex en la que el thread i ve si alguien
+//pidió un merge
+//vector< COLAS<mutex> > colasEspera
+
+vector<Arbol> arbolesGenerados;
+
+//acá van a estar las direcciones de los threads para poder crear y borrarlos
+vector<pthread_t> thread;
 
 typedef struct inputThread {
   int threadId;
@@ -140,16 +148,38 @@ void pintarNodo(int nodo, int thread){
 
 void *ThreadCicle(void* inThread){
 
+	//OJO, este "input" existe uno para cada thread, o lo van pisando??
 	inputThread input = *((inputThread *) inThread);
-
-	//Arbol propio
-	//TO DO, hay que ponerle un nombre que dependa de cada thread
-	//o hacer un arreglo de arboles
-	Grafo arbol;
 
 	//agarro el nodo ya elegido al azar que me pasaron
 	int nodoActual = input.nodoInicialRandom;//input.nodoAlgo;
+	int miTid = input.threadId;
 
+	//Arbol propio
+	Grafo arbolMio = arbolesGenerados[miTid];
+
+	//ESTE CICLO ESTA COPIADO ASI NOMAS DEL SECUENCIAL, CHEQUEARLO
+	for(int i = 0; i < g->numVertices; i++){
+
+		//ACA HAY QUE AGREGAR QUE CHEQUEE SU COLA A VER SI HAY QUE MERGEAR
+
+		arbolMio.numVertices += 1;
+
+		//La primera vez no lo agrego porque necesito dos nodos para unir
+		if(i > 0){
+		  arbolMio.insertarEje(nodoActual,distanciaNodo[miTid][nodoActual],distancia[miTid][nodoActual]);
+		}
+
+		//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
+		pintarNodo(nodoActual, miTid);
+
+		//OJO, TO DO, este no lo modifique, hay que copiar el secuencial y modificaralo
+		//Descubrir vecinos: los pinto y calculo distancias
+		pintarVecinos(g,nodoActual);
+
+		//Busco el nodo más cercano que no esté en el árbol, pero sea alcanzable
+		nodoActual = min_element(distancia[miTid].begin(),distancia[miTid].end()) - distancia[miTid].begin();
+	}
 
 }
 
@@ -183,10 +213,15 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	distanciaParal.assign(cantThreads, vector<int>(g->numVertices,IMAX));
 	distanciaNodoParal.assign(cantThreads, vector<int>(g->numVertices,-1));
 
+	//vector que usamos para crear y borrar los threads
+	thread.assign(cantThreads, defecto);//ver cual es el constructor por defecto
 
 	//estas son las structs que le pasamos a cada thread
 	vector<inputThread> inputs;
-	inputs.assign(cantThreads, ) //le hacemos un constructor por defecto a la struct?
+	inputs.assign(cantThreads, defecto) //le hacemos un constructor por defecto a la struct?
+
+	//sabemos que queremos un arbol para que genere cada thread
+	arbolesGenerados.assign(cantThreads, defecto);
 
 	//LANZAR LOS THREADS
 	for (int tid = 0; tid < cantThreads; ++tid){
@@ -202,12 +237,8 @@ void mstParalelo(Grafo *g, int cantThreads) {
     }
 
 	//ESPERAR A QUE LOS THREADS MUERAN
-    //si se declara el tid adentro del for entonces
-    //no es el mismo tid que arriba no?? porque eso generaba problemas
-    //en el ejemplo que dió rozen en clase del helloWorld.
-    //Igual pregunto de curiosidad, podemos ponerle "x" al "tid" este
-    for (int tid = 0; tid < cantThreads; ++tid){
-        pthread_join(thread[tid], NULL);
+    for (int x = 0; x < cantThreads; ++x){
+        pthread_join(thread[x], NULL);
     }
 
 
