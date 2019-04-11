@@ -40,6 +40,13 @@ int IMAX = numeric_limits<int>::max();
 vector<vector <int> > distanciaParal;
 vector<vector <int> > distanciaNodoParal;
 
+
+typedef struct inputThread {
+  int threadId;
+  int nodoInicialRandom;
+
+} inputThread;
+
 /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////
@@ -131,7 +138,9 @@ void pintarNodo(int nodo, int thread){
 }
 
 
-void *ThreadCicle(void* CambiarNOmbreQuePonemosAca){
+void *ThreadCicle(void* inThread){
+
+	inputThread input = *((inputThread *) inThread);
 
 	//Arbol propio
 	//TO DO, hay que ponerle un nombre que dependa de cada thread
@@ -139,7 +148,7 @@ void *ThreadCicle(void* CambiarNOmbreQuePonemosAca){
 	Grafo arbol;
 
 	//agarro el nodo ya elegido al azar que me pasaron
-	int nodoActual = ;//input.nodoAlgo;
+	int nodoActual = input.nodoInicialRandom;//input.nodoAlgo;
 
 
 }
@@ -156,6 +165,10 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	//Imprimo el grafo
 	g->imprimirGrafo();
 
+	//OJOO, TO DO, este grafo g habría que cambiarlo para que sea atómico no?
+	//o podríamos hacer vector<mutex> de tamaño g->cantNodos y antes de pintar
+	//un nodo pedimos permiso a su mutex, así podemos usar la struct grafo que dieron
+
 	//Semilla random
 	srand(time(0));
 
@@ -171,21 +184,28 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	distanciaNodoParal.assign(cantThreads, vector<int>(g->numVertices,-1));
 
 
+	//estas son las structs que le pasamos a cada thread
+	vector<inputThread> inputs;
+	inputs.assign(cantThreads, ) //le hacemos un constructor por defecto a la struct?
+
 	//LANZAR LOS THREADS
 	for (int tid = 0; tid < cantThreads; ++tid){
-		//acá podemos armar la struct que le pasamos a cada thread
 
-		//la struct que pasamos a cada thread entre otras cosas tiene tid
+		//le pasamos a cada thread su numero de hijo(no el posta del SO, el nuestro)
+		input[tid].threadId = tid;
+		input[tid].nodoInicialRandom = rand() % g->numVertices;
 
-		//podríamos pasarle también su nodo inicial con rand
-		//así no tenemos que preocuparnos por como es rand con muchos threads
-        pthread_create(&thread[tid], NULL, &ThreadCicle, &tid);
+		//OJO, hay que declarar el input de cada thread afuera del for
+		//para que no muera y los threads se queden sin sus datos
+		//(ahora está hecho así)
+        pthread_create(&thread[tid], NULL, &ThreadCicle, &(input[tid]));
     }
 
 	//ESPERAR A QUE LOS THREADS MUERAN
     //si se declara el tid adentro del for entonces
     //no es el mismo tid que arriba no?? porque eso generaba problemas
-    //en el ejemplo que dió rozen en clase del helloWorld
+    //en el ejemplo que dió rozen en clase del helloWorld.
+    //Igual pregunto de curiosidad, podemos ponerle "x" al "tid" este
     for (int tid = 0; tid < cantThreads; ++tid){
         pthread_join(thread[tid], NULL);
     }
