@@ -7,6 +7,11 @@
 
 using namespace std;
 
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+//////////////// DATOS DEL SECUENCIAL ///////////////////////////
+/////////////////////////////////////////////////////////////////
+
 #define BLANCO -10
 #define GRIS -20
 #define NEGRO -30
@@ -20,6 +25,26 @@ vector<int> distanciaNodo;
 
 /* MAXIMO VALOR DE INT */
 int IMAX = numeric_limits<int>::max();
+
+
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+//////////////// DATOS DEL PARALELO /////////////////////////////
+/////////////////////////////////////////////////////////////////
+
+//el colores usamos el secuencial que total tenemos un solo arbol compartido
+//el IMAX usamos el secuencial
+
+//DISTANCIA mínima del nodo al árbol.
+//distancia[i] = vector con todas las dists al arbol del thread i
+vector<vector <int> > distanciaParal;
+vector<vector <int> > distanciaNodoParal;
+
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////
+
 
 
 //Pinto el nodo de negro para marcar que fue puesto en el árbol
@@ -96,11 +121,25 @@ void mstSecuencial(Grafo *g){
 //////////////////NUESTRO CODIGO//////////////////////////////////
 /////////////////////////////////////////////////////////////////
 
+//Pinto el nodo de (-i) para marcar que fue puesto en el árbol i
+void pintarNodo(int nodo, int thread){
+	//OJOOOO TO DO, esto tiene que ser atómico!!!
+
+	colores[nodo] = thread;
+	//Para no volver a elegirlo (desde el thread i)
+	distanciaParal[thread][num] = IMAX;
+}
+
+
 void *ThreadCicle(void* CambiarNOmbreQuePonemosAca){
 
-	//Selecciono un nodo al azar del grafo para empezar
-	int nodoActual = rand() % g->numVertices;
-	//ojo que esto no se si no va a hacer que todos los threads empiecen igual
+	//Arbol propio
+	//TO DO, hay que ponerle un nombre que dependa de cada thread
+	//o hacer un arreglo de arboles
+	Grafo arbol;
+
+	//agarro el nodo ya elegido al azar que me pasaron
+	int nodoActual = ;//input.nodoAlgo;
 
 
 }
@@ -117,32 +156,51 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	//Imprimo el grafo
 	g->imprimirGrafo();
 
-	//INICIALIZO EL GRAFO CENTRAL COMPARTIDO
 	//Semilla random
 	srand(time(0));
-	//Arbol resultado
-	Grafo arbol;
 
-	
-	//ESTO HAY QUE VER SI LO QUEREMOS ANTES DE LANZAR LOS THREADS O QUE
+	//el arbol resultado que solo modifica el thread que no le quedan
+	//nodos que agregar (o sea que es el último)
+	Grafo arbolRta;
+
 	//Por ahora no colorié ninguno de los nodos
 	colores.assign(g->numVertices,BLANCO);
 	//Por ahora no calculé ninguna distancia
-	distancia.assign(g->numVertices,IMAX);
-	distanciaNodo.assign(g->numVertices,-1);
+	//en distancia[i] tengo vector de todas las dists al arbol i
+	distanciaParal.assign(cantThreads, vector<int>(g->numVertices,IMAX));
+	distanciaNodoParal.assign(cantThreads, vector<int>(g->numVertices,-1));
 
 
 	//LANZAR LOS THREADS
+	for (int tid = 0; tid < cantThreads; ++tid){
+		//acá podemos armar la struct que le pasamos a cada thread
 
+		//la struct que pasamos a cada thread entre otras cosas tiene tid
+
+		//podríamos pasarle también su nodo inicial con rand
+		//así no tenemos que preocuparnos por como es rand con muchos threads
+        pthread_create(&thread[tid], NULL, &ThreadCicle, &tid);
+    }
 
 	//ESPERAR A QUE LOS THREADS MUERAN
+    //si se declara el tid adentro del for entonces
+    //no es el mismo tid que arriba no?? porque eso generaba problemas
+    //en el ejemplo que dió rozen en clase del helloWorld
+    for (int tid = 0; tid < cantThreads; ++tid){
+        pthread_join(thread[tid], NULL);
+    }
 
 
 	//podríamos agregar que imprima el tiempo que tardó para medirlo,
 	//o que lo guarde en algún archivo junto con el tamaño del grafo
 	//y cosas así
+
+	//OJO, hay que ver donde guardamos el arbol resultado, porque ya no
+	//está en un solo lugar como el secuencial, el último thread que queda
+	//que lo sabe porque no le quedan nodos que agregar debería guardar
+	//su arbol en un arbolRta compartido
 	cout << endl << "== RESULTADO == " << endl;
- 	arbol.imprimirGrafo();
+ 	arbolRta.imprimirGrafo();
 }
 
 /////////////////////////////////////////////////////////////////7
