@@ -152,22 +152,35 @@ void mstParalelo(Grafo *g, int cantThreads) {
 
 int main(int argc, char const * argv[]) {
 
-  if(argc <= 1){
-	cerr << "Ingrese nombre de archivo" << endl;
+  if(argc <= 2){
+	cerr << "Ingrese nombre de archivo y cantidad de threads" << endl;
 	return 0;
   }
 
   string nombre;
   nombre = string(argv[1]);
+  int cantThreads = int(argv[2]);
 
   Grafo g;
-  if( g.inicializar(nombre) == 1){
 
-	//Corro el algoirtmo secuencial de g
-	mstSecuencial(&g);
+  if(cantThreads==1){  	
+	  if( g.inicializar(nombre) == 1){
 
-  }else{
-	cerr << "No se pudo cargar el grafo correctamente" << endl;
+		//Corro el algoirtmo secuencial de g
+		mstSecuencial(&g);
+
+	  }else{
+		cerr << "No se pudo cargar el grafo correctamente" << endl;
+	  }
+  }else{	
+	  if( g.inicializar(nombre) == 1){
+
+		//Corro el algoirtmo secuencial de g
+		mstParalelo(&g, cantThreads);
+
+	  }else{
+		cerr << "No se pudo cargar el grafo correctamente" << endl;
+	  }
   }
 
   return 1;
