@@ -349,3 +349,31 @@ int main(int argc, char const * argv[]) {
 
   return 1;
 }
+
+
+
+
+
+
+///////////////////////////////////////////////////////
+//mutex
+if (colores[nodoActual] != GRIS){
+	sumar_arbol(original, aMorir, nodoActual);
+	desalojar(thread_aMorir);
+	mutex.signal();
+}else{
+	mutex.signal();
+	sumar_nodo();
+}
+
+trasladar_recursivo(Grafo& original, Grafo& aMorir, int nodo){
+	agregar
+}
+
+void sumar_arbol(Grafo& original, Grafo& aMorir, int nodo_comun){
+	pintarNodoPararelo(nodo_comun, miTid);
+	vector<Eje> adyacentes = aMorir.listaDeAdyacencias(nodo_comun);
+	for (int i = 0; i < adyacentes.size(); ++i){
+		trasladar_recursivo(original, aMorir, adyacentes[i]->nodoDestino);
+	}
+}
