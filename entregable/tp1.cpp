@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <limits>
 #include <mutex>
+#include <queue>
+#include <utility>
 
 using namespace std;
 
@@ -33,6 +35,7 @@ int IMAX = numeric_limits<int>::max();
 //////////////// DATOS DEL PARALELO /////////////////////////////
 /////////////////////////////////////////////////////////////////
 
+
 //el colores usamos el secuencial que total tenemos un solo arbol compartido
 //el IMAX usamos el secuencial
 
@@ -45,7 +48,7 @@ vector<vector <int> > coloresArbol;
 
 //colasEspera[i] es la cola de mutex en la que el thread i ve si alguien
 //pidió un merge
-//vector< COLAS<mutex> > colasEspera
+vector< pair<mutex, queue<mutex> > >* colasEspera;
 
 //para modificar el nodo i del grafo compartido hay que pedir permiso
 //al mutex permisoNodo[i]
@@ -67,6 +70,8 @@ typedef struct inputThread {
   int nodoInicialRandom;
 
 } inputThread;
+
+
 
 /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////
@@ -194,16 +199,27 @@ void *ThreadCicle(void* inThread){
 	Grafo* arbolMio = &(arbolesGenerados[miTid]);
 
 	for(int i = 0; i < grafoCompartido->numVertices; i++){
-		//ACA HAY QUE AGREGAR QUE CHEQUEE SU COLA A VER SI HAY QUE MERGEAR
-		//POR QUE ESO SE CHEQUEA CON SPINLOCKS???????????
-	
+		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
+		//POR QUE ESO SE CHEQUEA CON SPINLOCKS????ESTA MAL ESTO???
+		colasEspera->operator[](miTid).first.lock();
+		if(!(colasEspera->operator[](miTid).second.empty())){
+			//en este caso me mergeo
+			////rendezvous???
+		}
+		colasEspera->operator[](miTid).first.unlock();
+
+
+
 		permisoNodo->operator[](nodoActual).lock();
 
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
 			//me mergeo con el thread "colores[nodoActual]"
+			//TO DO ACA FALTA LA FUNCION MERGE
+			//AVISALE A "colores[nodoActual]" QUE ME VOY A MERGEAR CON EL, Y AVISARLE CUANDO TERMINO
+			//rendezvous??? Creo dos mutexes y le paso los punteros a la cola del otro
 
-
+			//if "colores[nodoActual]"<miTid => muero, else=>vivo. Esto es un booleano que también podemos pasarle a la cola del otro
 			permisoNodo->operator[](nodoActual).unlock();
 
 			//si soy el thread que muere, muero
@@ -246,6 +262,32 @@ void *ThreadCicle(void* inThread){
 
 // ?? Merge(?? (int threadid1(el que llamó), threadid2(el otro), algo más?)){
 
+/*
+///////////////////////////////////////////////////////
+//mutex
+if (colores[nodoActual] != GRIS){
+	sumar_arbol(original, aMorir, nodoActual);
+	desalojar(thread_aMorir);
+	mutex.signal();
+}else{
+	mutex.signal();
+	sumar_nodo();
+}
+
+trasladar_recursivo(Grafo& original, Grafo& aMorir, int nodo){
+	agregar
+}
+
+void sumar_arbol(Grafo& original, Grafo& aMorir, int nodo_comun){
+	pintarNodoPararelo(nodo_comun, miTid);
+	vector<Eje> adyacentes = aMorir.listaDeAdyacencias(nodo_comun);
+	for (int i = 0; i < adyacentes.size(); ++i){
+		trasladar_recursivo(original, aMorir, adyacentes[i]->nodoDestino);
+	}
+}
+*/
+
+
 // }
 
 
@@ -263,6 +305,9 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	vector<mutex> mutexeses(g->numVertices);
 	permisoNodo = &mutexeses;
 	grafoCompartido = g;
+
+	vector<pair<mutex, queue<mutex> > > mutexesesCola(cantThreads);
+	colasEspera = &mutexesesCola;
 
 	//Por ahora no colorié ninguno de los nodos
 	colores.assign(g->numVertices,BLANCO);
@@ -354,26 +399,3 @@ int main(int argc, char const * argv[]) {
 
 
 
-
-///////////////////////////////////////////////////////
-//mutex
-if (colores[nodoActual] != GRIS){
-	sumar_arbol(original, aMorir, nodoActual);
-	desalojar(thread_aMorir);
-	mutex.signal();
-}else{
-	mutex.signal();
-	sumar_nodo();
-}
-
-trasladar_recursivo(Grafo& original, Grafo& aMorir, int nodo){
-	agregar
-}
-
-void sumar_arbol(Grafo& original, Grafo& aMorir, int nodo_comun){
-	pintarNodoPararelo(nodo_comun, miTid);
-	vector<Eje> adyacentes = aMorir.listaDeAdyacencias(nodo_comun);
-	for (int i = 0; i < adyacentes.size(); ++i){
-		trasladar_recursivo(original, aMorir, adyacentes[i]->nodoDestino);
-	}
-}
