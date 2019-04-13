@@ -4,6 +4,7 @@
 #include <time.h>
 #include <algorithm>
 #include <limits>
+#include <mutex>
 
 using namespace std;
 
@@ -46,11 +47,15 @@ vector<vector <int> > coloresArbol;
 //pidió un merge
 //vector< COLAS<mutex> > colasEspera
 
+//para modificar el nodo i del grafo compartido hay que pedir permiso
+//al mutex permisoNodo[i]
+//es un puntero al vector para poder tener tamaño dinámico sin copiar mutexes
+vector<mutex>* permisoNodo;
 
 //el arbol resultado que solo modifica el thread que no le quedan
 //nodos que agregar (o sea que es el último)
 // arbolRta para devolver resultado en paralelo
-// grafocompartido grafo original
+// grafoCompartido grafo original
 Grafo* arbolRta;
 Grafo* grafoCompartido;
 
@@ -145,12 +150,15 @@ void mstSecuencial(Grafo *g){
 
 //Pinto el nodo de (-i) para marcar que fue puesto en el árbol i
 void pintarNodoPararelo(int nodo, int miTid){
-	//OJOOOO TO DO, esto tiene que ser atómico!!!
-	// Falta agregar el mutex obvio ajaj y preguntar si otro ya lo pinto 
 	colores[nodo] = miTid;
 	coloresArbol[miTid][nodo] = NEGRO;
 	//Para no volver a elegirlo (desde el thread i)
 	distanciaParal[miTid][nodo] = IMAX;
+}
+
+void pintarNodoParareloAux(int nodo, int miTid){
+	colores[nodo] = miTid;
+	coloresArbol[miTid][nodo] = NEGRO;
 }
 
 void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
@@ -185,25 +193,49 @@ void *ThreadCicle(void* inThread){
 	//Arbol propio
 	Grafo* arbolMio = &(arbolesGenerados[miTid]);
 
-	//ESTE CICLO ESTA COPIADO ASI NOMAS DEL SECUENCIAL, CHEQUEARLO
 	for(int i = 0; i < grafoCompartido->numVertices; i++){
 		//ACA HAY QUE AGREGAR QUE CHEQUEE SU COLA A VER SI HAY QUE MERGEAR
-		arbolMio->numVertices += 1;
+		//POR QUE ESO SE CHEQUEA CON SPINLOCKS???????????
+	
+		permisoNodo->operator[](nodoActual).lock();
 
-		//La primera vez no lo agrego porque necesito dos nodos para unir
-		if(i > 0){
-		  arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
+		//si ya estaba pintado me mergeo
+		if(colores[nodoActual]!=BLANCO){
+			//me mergeo con el thread "colores[nodoActual]"
+
+
+			permisoNodo->operator[](nodoActual).unlock();
+
+			//si soy el thread que muere, muero
+		}else{	
+			//este camino es si todo sale bien como el secuencial
+
+			//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
+			// Esto va a tener que estar antes, con el cambio correspondiente en las distancias (que tiene que ser despues de agregarlo al arbol en caso de no mergeo)
+			pintarNodoParareloAux(nodoActual, miTid);			
+			permisoNodo->operator[](nodoActual).unlock();
+
+			arbolMio->numVertices += 1;
+
+			//La primera vez no lo agrego porque necesito dos nodos para unir
+			if(i > 0){
+				arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
+			}
+
+			distanciaParal[miTid][nodoActual] = IMAX;
+
+			//Descubrir vecinos: los pinto y calculo distancias
+			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
+			
 		}
-		//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
-		// Esto va a tener que estar antes, con el cambio correspondiente en las distancias (que tiene que ser despues de agregarlo al arbol en caso de no mergeo)
-		pintarNodoPararelo(nodoActual, miTid);
-		//OJO, TO DO, este no lo modifique, hay que copiar el secuencial y modificaralo
-		//Descubrir vecinos: los pinto y calculo distancias
-		pintarVecinosParalelo(arbolMio,nodoActual, miTid);
+
+		//tanto si mergee como si no, tengo que buscar el prox nodoActual
 		//Busco el nodo más cercano que no esté en el árbol, pero sea alcanzable
 		nodoActual = min_element(distanciaParal[miTid].begin(),distanciaParal[miTid].end()) - distanciaParal[miTid].begin();
-		
 	}
+
+	//TO DO, creo que nunca va a llegar acá, porque en realidad ningún thread "agrega a mano" los n nodos, porque muchos
+	//los consigue por merge, entonces hay que agregar un break adentro del for si no le quedan nodos que agregar
 	// Si llegue aca, es el resultado (unico thread que queda)
 	arbolRta = arbolMio;
 	return NULL;
@@ -222,17 +254,16 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	//Imprimo el grafo
 	g->imprimirGrafo();
 
-	//OJOO, TO DO, este grafo g habría que cambiarlo para que sea atómico no?
-	//o podríamos hacer vector<mutex> de tamaño g->cantNodos y antes de pintar
-	//un nodo pedimos permiso a su mutex, así podemos usar la struct grafo que dieron
-
 	//Semilla random
 	srand(time(0));
 
 	// Arreglo para crear threads
 	pthread_t thread[cantThreads];
-	// Para que lo puedan ver todos los threads
+
+	vector<mutex> mutexeses(g->numVertices);
+	permisoNodo = &mutexeses;
 	grafoCompartido = g;
+
 	//Por ahora no colorié ninguno de los nodos
 	colores.assign(g->numVertices,BLANCO);
 	coloresArbol.assign(cantThreads, vector<int>(g->numVertices,BLANCO));
@@ -254,9 +285,6 @@ void mstParalelo(Grafo *g, int cantThreads) {
 		inputs[tid].threadId = tid;
 		inputs[tid].nodoInicialRandom = rand() % g->numVertices;
 
-		//OJO, hay que declarar el input de cada thread afuera del for
-		//para que no muera y los threads se queden sin sus datos
-		//(ahora está hecho así)
         pthread_create(&thread[tid], NULL, &ThreadCicle, &(inputs[tid]));
 
     }
@@ -297,6 +325,9 @@ int main(int argc, char const * argv[]) {
 
   if(cantThreads==1){  	
 	  if( g.inicializar(nombre) == 1){
+
+	  	//TO DO, para los tests igual creo que estaría bueno justamente compara el paralelo(g,1) con el secuencial(g)
+	  	//o comparar con el secuencial, no siempre con el paralelo
 
 		//Corro el algoirtmo secuencial de g
 		mstParalelo(&g, cantThreads);
