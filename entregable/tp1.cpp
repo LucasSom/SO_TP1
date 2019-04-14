@@ -186,6 +186,20 @@ void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
   }
 }
 
+void agregarNodo(Grafo& arbolMio, int nodoActual, int miTid, int i){
+	pintarNodoParareloAux(nodoActual, miTid);			
+	permisoNodo->operator[](nodoActual).unlock();
+
+	//La primera vez no lo agrego porque necesito dos nodos para unir
+	if(arbolMio->numVertices > 0){
+		arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
+	}
+	arbolMio->numVertices += 1;
+
+	distanciaParal[miTid][nodoActual] = IMAX;
+}
+
+
 void *ThreadCicle(void* inThread){
 
 	//OJO, este "input" existe uno para cada thread, o lo van pisando??
@@ -216,7 +230,7 @@ void *ThreadCicle(void* inThread){
 		if(colores[nodoActual]!=BLANCO){
 			//me mergeo con el thread "colores[nodoActual]"
 			//TO DO ACA FALTA LA FUNCION MERGE
-			//AVISALE A "colores[nodoActual]" QUE ME VOY A MERGEAR CON EL, Y AVISARLE CUANDO TERMINO
+			//AVISARLE A "colores[nodoActual]" QUE ME VOY A MERGEAR CON EL, Y AVISARLE CUANDO TERMINO
 			//rendezvous??? Creo dos mutexes y le paso los punteros a la cola del otro
 
 			//if "colores[nodoActual]"<miTid => muero, else=>vivo. Esto es un booleano que también podemos pasarle a la cola del otro
@@ -228,7 +242,7 @@ void *ThreadCicle(void* inThread){
 
 			//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
 			// Esto va a tener que estar antes, con el cambio correspondiente en las distancias (que tiene que ser despues de agregarlo al arbol en caso de no mergeo)
-			pintarNodoParareloAux(nodoActual, miTid);			
+			/*pintarNodoParareloAux(nodoActual, miTid);			
 			permisoNodo->operator[](nodoActual).unlock();
 
 			arbolMio->numVertices += 1;
@@ -238,7 +252,9 @@ void *ThreadCicle(void* inThread){
 				arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
 			}
 
-			distanciaParal[miTid][nodoActual] = IMAX;
+			distanciaParal[miTid][nodoActual] = IMAX;*/
+			agregarNodo(arbolMio, nodoActual, miTid, i);
+
 
 			//Descubrir vecinos: los pinto y calculo distancias
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
@@ -262,30 +278,28 @@ void *ThreadCicle(void* inThread){
 
 // ?? Merge(?? (int threadid1(el que llamó), threadid2(el otro), algo más?)){
 
-/*
 ///////////////////////////////////////////////////////
-//mutex
-if (colores[nodoActual] != GRIS){
-	sumar_arbol(original, aMorir, nodoActual);
-	desalojar(thread_aMorir);
-	mutex.signal();
-}else{
-	mutex.signal();
-	sumar_nodo();
-}
-
-trasladar_recursivo(Grafo& original, Grafo& aMorir, int nodo){
-	agregar
-}
-
-void sumar_arbol(Grafo& original, Grafo& aMorir, int nodo_comun){
-	pintarNodoPararelo(nodo_comun, miTid);
-	vector<Eje> adyacentes = aMorir.listaDeAdyacencias(nodo_comun);
-	for (int i = 0; i < adyacentes.size(); ++i){
-		trasladar_recursivo(original, aMorir, adyacentes[i]->nodoDestino);
+void eliminarNodo(Grafo& aMorir, int nodo, int miTid){
+	//TO DO
+	//La ultima vez no elimino ejes porque ya no tengo
+	if(arbolMio->numVertices > 1){
+		//TO DO: ELIMINAR EJE
+		//arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
 	}
+	arbolMio->numVertices -= 1;
 }
-*/
+
+void sumar_arbol(Grafo& original, Grafo& aMorir, int nodo, int miTid){
+	pintarNodoPararelo(nodo_comun, miTid);
+	vector<Eje> adyacentes = aMorir.listaDeAdyacencias(nodo);
+	for (int i = 0; i < adyacentes.size(); ++i){
+		sumar_arbol(original, aMorir, adyacentes[i]->nodoDestino, miTid);
+		agregarNodo(original, nodo, miTid, 1);//el 1 es porque si fuera 0, no insertaria el eje
+		eliminarNodo(aMorir, nodo, miTid);
+	}
+	//pintar de gris los nodos del aMorir
+}
+
 
 
 // }
