@@ -46,9 +46,17 @@ vector<vector <int> > distanciaNodoParal;
 // Colores de los nodos para arbol del thread i
 vector<vector <int> > coloresArbol;
 
-//colasEspera[i] es la cola de mutex en la que el thread i ve si alguien
-//pidió un merge
-vector< pair<mutex, queue<mutex> > >* colasEspera;
+
+typedef struct mergeStruct {
+  mutex mutexDeCola;
+  mutex mutexDePedidor;
+  int tidDelQuePide;
+
+} mergeStruct;
+
+//colasEspera[i] es la cola en la que el thread i ve si alguien pidió un merge
+//colasEspera[i] también tiene un mutex para que la cola no se rompa por la concurrencia
+vector< pair<mutex, queue<mergeStruct*> > >* colasEspera;
 
 //para modificar el nodo i del grafo compartido hay que pedir permiso
 //al mutex permisoNodo[i]
@@ -63,7 +71,6 @@ Grafo* arbolRta;
 Grafo* grafoCompartido;
 
 vector<Grafo> arbolesGenerados;
-
 
 typedef struct inputThread {
   int threadId;
@@ -186,6 +193,7 @@ void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
   }
 }
 
+/*
 void agregarNodo(Grafo& arbolMio, int nodoActual, int miTid, int i){
 	pintarNodoParareloAux(nodoActual, miTid);			
 	permisoNodo->operator[](nodoActual).unlock();
@@ -198,7 +206,7 @@ void agregarNodo(Grafo& arbolMio, int nodoActual, int miTid, int i){
 
 	distanciaParal[miTid][nodoActual] = IMAX;
 }
-
+*/
 
 void *ThreadCicle(void* inThread){
 
@@ -213,36 +221,45 @@ void *ThreadCicle(void* inThread){
 	Grafo* arbolMio = &(arbolesGenerados[miTid]);
 
 	for(int i = 0; i < grafoCompartido->numVertices; i++){
-		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
-		//POR QUE ESO SE CHEQUEA CON SPINLOCKS????ESTA MAL ESTO???
-		colasEspera->operator[](miTid).first.lock();
-		if(!(colasEspera->operator[](miTid).second.empty())){
-			//en este caso me mergeo
-			////rendezvous???
-		}
-		colasEspera->operator[](miTid).first.unlock();
-
-
 
 		permisoNodo->operator[](nodoActual).lock();
-
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
-			//me mergeo con el thread "colores[nodoActual]"
-			//TO DO ACA FALTA LA FUNCION MERGE
-			//AVISARLE A "colores[nodoActual]" QUE ME VOY A MERGEAR CON EL, Y AVISARLE CUANDO TERMINO
-			//rendezvous??? Creo dos mutexes y le paso los punteros a la cola del otro
 
-			//if "colores[nodoActual]"<miTid => muero, else=>vivo. Esto es un booleano que también podemos pasarle a la cola del otro
+			mergeStruct rendezvous;
+			rendezvous.tidDelQuePide = miTid;
+
+			//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
+			colasEspera->operator[](miTid).first.lock();
+			colasEspera->operator[](miTid).second.push(&rendezvous);			
+			colasEspera->operator[](miTid).first.unlock();
+			
+			//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 			permisoNodo->operator[](nodoActual).unlock();
 
-			//si soy el thread que muere, muero
+			rendezvous.mutexDePedidor.unlock();
+			rendezvous.mutexDeCola.lock();
+
+			//me mergeo con el thread "colores[nodoActual]"
+			//HAGO EL MERGE
+
+			rendezvous.mutexDePedidor.unlock();
+			rendezvous.mutexDeCola.lock();
+
+			//me fijo si soy el thread que tiene que morir
+			if (colores[nodoActual]<miTid){
+				//en este caso me mergee con alguien mas chico, y tengo que morir
+				
+				//HABRIA QUE HACER ALGO MAS ACA??
+				pthread_exit(NULL);
+			}
+
 		}else{	
 			//este camino es si todo sale bien como el secuencial
 
 			//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
 			// Esto va a tener que estar antes, con el cambio correspondiente en las distancias (que tiene que ser despues de agregarlo al arbol en caso de no mergeo)
-			/*pintarNodoParareloAux(nodoActual, miTid);			
+			pintarNodoParareloAux(nodoActual, miTid);			
 			permisoNodo->operator[](nodoActual).unlock();
 
 			arbolMio->numVertices += 1;
@@ -252,14 +269,51 @@ void *ThreadCicle(void* inThread){
 				arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
 			}
 
-			distanciaParal[miTid][nodoActual] = IMAX;*/
-			agregarNodo(arbolMio, nodoActual, miTid, i);
+			distanciaParal[miTid][nodoActual] = IMAX;
+			
+			//agregarNodo(arbolMio, nodoActual, miTid, i);
 
 
 			//Descubrir vecinos: los pinto y calculo distancias
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
 			
 		}
+
+
+		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
+		colasEspera->operator[](miTid).first.lock();
+		while(!(colasEspera->operator[](miTid).second.empty())){
+			//si tengo algo en la cola me mergeo
+
+			//agarro los dos mutex que me pasó el primer thread con el que me voy a mergear (y su tid)
+			mergeStruct* rendezvousP = colasEspera->operator[](miTid).second.front(); 
+			mergeStruct rendezvous;
+			colasEspera->operator[](miTid).second.pop();
+
+			//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
+			rendezvous.mutexDePedidor.lock();
+			rendezvous.mutexDeCola.unlock();
+
+			//me mergeo con el thread que me lo pidió
+			//HAGO EL MERGE
+
+			rendezvous.mutexDePedidor.lock();
+			rendezvous.mutexDeCola.unlock();
+
+			//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
+			if(rendezvous.tidDelQuePide<miTid){
+				//en este caso muero
+
+				//TO DO, RECORDAR QUE EL MERGE TIENE QUE COPIAR LA COLA, Y QUE PASE LA COLA DESPUÉS DE LOS NODOS
+				colasEspera->operator[](miTid).first.unlock();
+				//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
+
+				pthread_exit(NULL);
+			}
+		}
+		colasEspera->operator[](miTid).first.unlock();
+
+
 
 		//tanto si mergee como si no, tengo que buscar el prox nodoActual
 		//Busco el nodo más cercano que no esté en el árbol, pero sea alcanzable
@@ -270,12 +324,13 @@ void *ThreadCicle(void* inThread){
 	//los consigue por merge, entonces hay que agregar un break adentro del for si no le quedan nodos que agregar
 	// Si llegue aca, es el resultado (unico thread que queda)
 	arbolRta = arbolMio;
+	cout << "llegue al final" << endl;
 	return NULL;
 
 }
 
 
-
+/*
 // ?? Merge(?? (int threadid1(el que llamó), threadid2(el otro), algo más?)){
 
 ///////////////////////////////////////////////////////
@@ -304,7 +359,7 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int nodo, int miTid){
 
 // }
 
-
+*/
 
 void mstParalelo(Grafo *g, int cantThreads) {
 	//Imprimo el grafo
@@ -320,7 +375,7 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	permisoNodo = &mutexeses;
 	grafoCompartido = g;
 
-	vector<pair<mutex, queue<mutex> > > mutexesesCola(cantThreads);
+	vector<pair<mutex, queue<mergeStruct*> > > mutexesesCola(cantThreads);
 	colasEspera = &mutexesesCola;
 
 	//Por ahora no colorié ninguno de los nodos
