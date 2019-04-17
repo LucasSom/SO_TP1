@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <limits>
 #include <mutex>
+#include <pthread>
 #include <queue>
 #include <utility>
 
@@ -214,6 +215,10 @@ void *ThreadCicle(void* inThread){
 
 			mergeStruct rendezvous;
 			rendezvous.tidDelQuePide = miTid;
+			//lockeamos los mutex para que funcione el rendezvous, si no pasan de largo
+			//es como inicializar un semaforo en cero
+			rendezvous.mutexDeCola.lock();
+			rendezvous.mutexDePedidor.lock();
 
 			//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
 			colasEspera->operator[](colores[nodoActual]).first.lock();
@@ -317,8 +322,6 @@ void *ThreadCicle(void* inThread){
 
 
 void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
-
-	vector<Eje> conjuntoEjes;
 	for (map<int,vector<Eje>>::iterator nodo_ptr = grafo.listaDeAdyacencias.begin(); nodo_ptr < grafo.listaDeAdyacencias.end(); ++nodo_ptr){
 		for (vector<Eje>::iterator it = grafo.vecinosBegin(nodo); it != grafo.vecinosEnd(nodo); ++it){	
 			if (*nodo_ptr < *it){//para evitar push_backear dos veces cada eje
@@ -358,6 +361,8 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 			}
 		}//ELSE: si el nodo en el arbol del thread que vive es negro, no tengo que hacer nada
 	}
+
+	original.numVertices += aMorir.numVertices;
 }
 
 
