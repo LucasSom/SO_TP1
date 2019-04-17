@@ -193,20 +193,6 @@ void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
   }
 }
 
-/*
-void agregarNodo(Grafo& arbolMio, int nodoActual, int miTid, int i){
-	pintarNodoParareloAux(nodoActual, miTid);			
-	permisoNodo->operator[](nodoActual).unlock();
-
-	//La primera vez no lo agrego porque necesito dos nodos para unir
-	if(arbolMio->numVertices > 0){
-		arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
-	}
-	arbolMio->numVertices += 1;
-
-	distanciaParal[miTid][nodoActual] = IMAX;
-}
-*/
 
 void *ThreadCicle(void* inThread){
 
@@ -230,9 +216,9 @@ void *ThreadCicle(void* inThread){
 			rendezvous.tidDelQuePide = miTid;
 
 			//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
-			colasEspera->operator[](miTid).first.lock();
-			colasEspera->operator[](miTid).second.push(&rendezvous);			
-			colasEspera->operator[](miTid).first.unlock();
+			colasEspera->operator[](colores[nodoActual]).first.lock();
+			colasEspera->operator[](colores[nodoActual]).second.push(&rendezvous);			
+			colasEspera->operator[](colores[nodoActual]).first.unlock();
 			
 			//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 			permisoNodo->operator[](nodoActual).unlock();
@@ -374,13 +360,6 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 	}
 }
 
-
-
-
-
-// }
-
-*/
 
 void mstParalelo(Grafo *g, int cantThreads) {
 	//Imprimo el grafo
