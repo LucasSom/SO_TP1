@@ -330,30 +330,51 @@ void *ThreadCicle(void* inThread){
 }
 
 
-/*
-// ?? Merge(?? (int threadid1(el que llamó), threadid2(el otro), algo más?)){
+void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 
-///////////////////////////////////////////////////////
-void eliminarNodo(Grafo& aMorir, int nodo, int miTid){
-	//TO DO
-	//La ultima vez no elimino ejes porque ya no tengo
-	if(arbolMio->numVertices > 1){
-		//TO DO: ELIMINAR EJE
-		//arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
+	vector<Eje> conjuntoEjes;
+	for (map<int,vector<Eje>>::iterator nodo_ptr = grafo.listaDeAdyacencias.begin(); nodo_ptr < grafo.listaDeAdyacencias.end(); ++nodo_ptr){
+		for (vector<Eje>::iterator it = grafo.vecinosBegin(nodo); it != grafo.vecinosEnd(nodo); ++it){	
+			if (*nodo_ptr < *it){//para evitar push_backear dos veces cada eje
+				original.insertarEje(*nodo_ptr, it->nodoDestino, it->peso);
+			}
+		}
 	}
-	arbolMio->numVertices -= 1;
+
+	for (int nodo = 0; nodo < coloresArbol[miTid].size(); ++nodo){
+		if(coloresArbol[miTid][nodo] != NEGRO){
+			if (coloresArbol[TidAMorir][nodo] == NEGRO){
+				/*En aMorir es negro pero en el original no.
+				Entonces, tengo que pintarlo de negro y actualizar la distancia*/
+				distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];//distancia va a ser IMAX
+				distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+				coloresArbol[miTid][nodo] = NEGRO;
+
+				permisoNodo->operator[](nodo).lock();
+				colores[nodo] = miTid;
+				permisoNodo->operator[](nodo).unlock();
+			}else{//ambos son blancos o grises
+				if (coloresArbol[TidAMorir][nodo] == GRIS){
+					if (coloresArbol[miTid][nodo] == GRIS){
+						/* Ambos son grises */
+						if (distanciaParal[miTid][nodo] > distanciaParal[TidAMorir][nodo]){
+							distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
+							distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+							//Ya esta de gris, no tengo que actualizar el color
+						}//ELSE: dejo como estaba
+					}else{
+						/*En el original es blanco, y en el aMorir, gris*/
+						distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
+						distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+						coloresArbol[miTid][nodo] = GRIS;
+					}
+				}//ELSE: si el nodo en el arbol de aMorir es blanco, dejo lo que esta
+			}
+		}//ELSE: si el nodo en el arbol del thread que vive es negro, no tengo que hacer nada
+	}
 }
 
-void sumar_arbol(Grafo& original, Grafo& aMorir, int nodo, int miTid){
-	pintarNodoPararelo(nodo_comun, miTid);
-	vector<Eje> adyacentes = aMorir.listaDeAdyacencias(nodo);
-	for (int i = 0; i < adyacentes.size(); ++i){
-		sumar_arbol(original, aMorir, adyacentes[i]->nodoDestino, miTid);
-		agregarNodo(original, nodo, miTid, 1);//el 1 es porque si fuera 0, no insertaria el eje
-		eliminarNodo(aMorir, nodo, miTid);
-	}
-	//pintar de gris los nodos del aMorir
-}
+
 
 
 
