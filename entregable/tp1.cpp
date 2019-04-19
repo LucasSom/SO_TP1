@@ -371,7 +371,7 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 	colasEspera->operator[](TidAMorir).first.lock();
 	int cantidadEncolados = colasEspera->operator[](TidAMorir).second.size();
 	//no lo hago directamente en la guarda del ciclo porque va a ir disminuyendo todo el tiempo
-	for (int i = 0; i < cantidadEncolados; ++i){
+	while (! colasEspera->operator[](miTid).second.empty()){
 		mergeStruct* encolado = colasEspera->operator[](TidAMorir).second.front();
 		colasEspera->operator[](TidAMorir).second.pop();
 		colasEspera->operator[](miTid).second.push(encolado);
