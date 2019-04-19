@@ -268,11 +268,11 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 
 void *ThreadCicle(void* inThread){
 
-	//OJO, este "input" existe uno para cada thread, o lo van pisando??
+	//cada thread tiene su input con tu Tid y su nodo inicial
 	inputThread input = *((inputThread *) inThread);
 
 	//agarro el nodo ya elegido al azar que me pasaron
-	int nodoActual = input.nodoInicialRandom;//input.nodoAlgo;
+	int nodoActual = input.nodoInicialRandom;
 	int miTid = input.threadId;
 
 	//Arbol propio
@@ -280,6 +280,7 @@ void *ThreadCicle(void* inThread){
 
 	for(int i = 0; i < grafoCompartido->numVertices; i++){
 
+		//me aseguro que nadie esté tocando este nodo compartido
 		permisoNodo->operator[](nodoActual).lock();
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
@@ -321,7 +322,6 @@ void *ThreadCicle(void* inThread){
 			//este camino es si todo sale bien como el secuencial
 
 			//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
-			// Esto va a tener que estar antes, con el cambio correspondiente en las distancias (que tiene que ser despues de agregarlo al arbol en caso de no mergeo)
 			pintarNodoParareloAux(nodoActual, miTid);			
 			permisoNodo->operator[](nodoActual).unlock();
 
@@ -334,12 +334,8 @@ void *ThreadCicle(void* inThread){
 
 			distanciaParal[miTid][nodoActual] = IMAX;
 			
-			//agregarNodo(arbolMio, nodoActual, miTid, i);
-
-
 			//Descubrir vecinos: los pinto y calculo distancias
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
-			
 		}
 
 
@@ -367,7 +363,6 @@ void *ThreadCicle(void* inThread){
 			if(rendezvous.tidDelQuePide<miTid){
 				//en este caso muero
 
-				//TO DO, RECORDAR QUE EL MERGE TIENE QUE COPIAR LA COLA, Y QUE PASE LA COLA DESPUÉS DE LOS NODOS
 				colasEspera->operator[](miTid).first.unlock();
 				//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
 
