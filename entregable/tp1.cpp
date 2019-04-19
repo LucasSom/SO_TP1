@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <limits>
 #include <mutex>
-#include <pthread>
 #include <queue>
 #include <utility>
 
@@ -233,6 +232,7 @@ void *ThreadCicle(void* inThread){
 
 			//me mergeo con el thread "colores[nodoActual]"
 			//HAGO EL MERGE
+			sumar_arbol(arbolesGenerados[miTid], arbolesGenerados[colores[nodoActual]], miTid, colores[nodoActual]);
 
 			rendezvous.mutexDePedidor.unlock();
 			rendezvous.mutexDeCola.lock();
@@ -322,10 +322,14 @@ void *ThreadCicle(void* inThread){
 
 
 void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
-	for (map<int,vector<Eje>>::iterator nodo_ptr = grafo.listaDeAdyacencias.begin(); nodo_ptr < grafo.listaDeAdyacencias.end(); ++nodo_ptr){
-		for (vector<Eje>::iterator it = grafo.vecinosBegin(nodo); it != grafo.vecinosEnd(nodo); ++it){	
-			if (*nodo_ptr < *it){//para evitar push_backear dos veces cada eje
-				original.insertarEje(*nodo_ptr, it->nodoDestino, it->peso);
+
+	for (map<int,vector<Eje>>::iterator nodo_ptr = aMorir.listaDeAdyacencias.begin(); nodo_ptr != aMorir.listaDeAdyacencias.end(); ++nodo_ptr){
+		//recorre todos los nodos del arbol aMorir
+		for (vector<Eje>::iterator it = aMorir.vecinosBegin(nodo_ptr->first); it != aMorir.vecinosEnd(nodo_ptr->first); ++it){	
+			//recorre los ejes de cada nodo
+			if (nodo_ptr->first < it->nodoDestino){
+			//para evitar push_backear dos veces cada eje, solo inserto al menor
+				original.insertarEje(nodo_ptr->first, it->nodoDestino, it->peso);
 			}
 		}
 	}
@@ -363,6 +367,16 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 	}
 
 	original.numVertices += aMorir.numVertices;
+
+	colasEspera->operator[](TidAMorir).first.lock();
+	int cantidadEncolados = colasEspera->operator[](TidAMorir).second.size();
+	//no lo hago directamente en la guarda del ciclo porque va a ir disminuyendo todo el tiempo
+	for (int i = 0; i < cantidadEncolados; ++i){
+		mergeStruct* encolado = colasEspera->operator[](TidAMorir).second.front();
+		colasEspera->operator[](TidAMorir).second.pop();
+		colasEspera->operator[](miTid).second.push(encolado);
+	}				
+	colasEspera->operator[](TidAMorir).first.unlock();//es necesario esto?
 }
 
 
