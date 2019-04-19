@@ -283,10 +283,13 @@ void *ThreadCicle(void* inThread){
 
 	for(int i = 0; i < grafoCompartido->numVertices; i++){
 
+		printf("thread %d empiezo ciclo \n", miTid);
+
 		//me aseguro que nadie esté tocando este nodo compartido
 		permisoNodo->operator[](nodoActual).lock();
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
+			printf("thread %d voy a pedir merge \n", miTid);
 
 			int otroThread = colores[nodoActual];
 
@@ -306,10 +309,11 @@ void *ThreadCicle(void* inThread){
 			
 			//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 			permisoNodo->operator[](nodoActual).unlock();
-			printf("Soy pedidor \n");
+			printf("Soy pedidor Nº: %d \n", miTid);
 			sem_post(&rendezvous.semDePedidor);
+			printf("Soy pedidor Nº: %d hice signal\n", miTid);
 			sem_wait(&rendezvous.semDeCola);
-
+			printf("Soy pedidor Nº: %d en rendezvous\n", miTid);
 			//me mergeo con el thread "colores[nodoActual]"
 			//HAGO EL MERGE
 			//rendezvous.mutexDePedidor.unlock();
@@ -318,21 +322,25 @@ void *ThreadCicle(void* inThread){
 			//void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir) es la función merge
 			if (otroThread<miTid){
 				//en este caso yo soy el que muere
+				printf("thread %d pido merge y muero \n", miTid);
 				sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], otroThread, miTid);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
+				printf("thread %d voy a morir \n", miTid);
 				//HABRIA QUE HACER ALGO MAS ACA??
 				pthread_exit(NULL);
 			}else{
 				//en este caso yo sobrevivo
+				printf("thread %d pido merge y vivo \n", miTid);
 				sumar_arbol(arbolesGenerados[miTid], arbolesGenerados[otroThread], miTid, otroThread);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
+				printf("thread %d mergee y sigo vivo \n", miTid);
 			}
 
 		}else{	
 			//este camino es si todo sale bien como el secuencial
-
+			printf("thread %d estoy pintando nodo nuevo \n", miTid);
 			//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
 			pintarNodoParareloAux(nodoActual, miTid);			
 			permisoNodo->operator[](nodoActual).unlock();
@@ -348,22 +356,24 @@ void *ThreadCicle(void* inThread){
 			
 			//Descubrir vecinos: los pinto y calculo distancias
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
+			printf("thread %d pinte bien nodo nuevo, tengo %d nodos en mi AGM \n", miTid, arbolMio->numVertices);
 		}
 
-
+		printf("thread %d voy a chequear mi cola \n", miTid);
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
 		colasEspera->operator[](miTid).first.lock();
 		while(!(colasEspera->operator[](miTid).second.empty())){
 			//si tengo algo en la cola me mergeo
-
+			printf("Soy quien chequea cola Nº: %d \n", miTid);
 			//agarro los dos mutex que me pasó el primer thread con el que me voy a mergear (y su tid)
 			mergeStruct* rendezvousP = colasEspera->operator[](miTid).second.front(); 
 			mergeStruct rendezvous;
 			colasEspera->operator[](miTid).second.pop();
-			printf("Soy cola \n");
 			//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
 			sem_post(&rendezvous.semDeCola);
+			printf("Soy quien chequea cola Nº: %d hice signal \n", miTid);
 			sem_wait(&rendezvous.semDePedidor);
+			printf("Soy quien chequea cola Nº: %d en rendezvous \n", miTid);
 			//se que en este momento el thread que me lo pidió está haciendo el merge, porque
 			//estamos en el rendezvous
 			sem_post(&rendezvous.semDeCola);
@@ -377,14 +387,18 @@ void *ThreadCicle(void* inThread){
 				pthread_exit(NULL);
 			}
 		}
+		printf("thread %d tengo vacia mi cola \n", miTid);
 		colasEspera->operator[](miTid).first.unlock();
 
+		printf("thread %d veo si tengo el AGM \n", miTid);
 		//me fijo si ya terminé de armar el arbol generador mínimo
 		if (arbolMio->numVertices==grafoCompartido->numVertices){
 			arbolRta=arbolMio;
+			printf("thread %d tengo el AGM y muero \n", miTid);
 			pthread_exit(NULL);
 		}
 
+		printf("thread %d agarro nuevo nodoActual \n", miTid);
 		//tanto si mergee como si no, tengo que buscar el prox nodoActual
 		//Busco el nodo más cercano que no esté en el árbol, pero sea alcanzable
 		nodoActual = min_element(distanciaParal[miTid].begin(),distanciaParal[miTid].end()) - distanciaParal[miTid].begin();
