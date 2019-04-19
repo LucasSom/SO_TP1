@@ -49,8 +49,6 @@ vector<vector <int> > coloresArbol;
 
 
 typedef struct mergeStruct {
-  //mutex mutexDeCola;
-  //mutex mutexDePedido&r;
   sem_t semDeCola;
   sem_t semDePedidor;
   int tidDelQuePide;
@@ -309,7 +307,7 @@ void *ThreadCicle(void* inThread){
 			printf("Soy pedidor \n");
 			sem_post(&rendezvous.semDePedidor);
 			sem_wait(&rendezvous.semDeCola);
-
+			printf("LLegue a merge siendo pedidor\n");
 			//me mergeo con el thread "colores[nodoActual]"
 			//HAGO EL MERGE
 			//rendezvous.mutexDePedidor.unlock();
@@ -321,6 +319,7 @@ void *ThreadCicle(void* inThread){
 				sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], otroThread, miTid);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
+				printf("Pase merge siendo pedidor\n");
 				//HABRIA QUE HACER ALGO MAS ACA??
 				pthread_exit(NULL);
 			}else{
@@ -350,7 +349,6 @@ void *ThreadCicle(void* inThread){
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
 		}
 
-
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
 		colasEspera->operator[](miTid).first.lock();
 		while(!(colasEspera->operator[](miTid).second.empty())){
@@ -358,19 +356,19 @@ void *ThreadCicle(void* inThread){
 
 			//agarro los dos mutex que me pasó el primer thread con el que me voy a mergear (y su tid)
 			mergeStruct* rendezvousP = colasEspera->operator[](miTid).second.front(); 
-			mergeStruct rendezvous;
 			colasEspera->operator[](miTid).second.pop();
 			printf("Soy cola \n");
 			//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
-			sem_post(&rendezvous.semDeCola);
-			sem_wait(&rendezvous.semDePedidor);
+			sem_post(&rendezvousP->semDeCola);
+			sem_wait(&rendezvousP->semDePedidor);
 			//se que en este momento el thread que me lo pidió está haciendo el merge, porque
 			//estamos en el rendezvous
-			sem_post(&rendezvous.semDeCola);
-			sem_wait(&rendezvous.semDePedidor);
-
+			printf("LLegue merge desde cola\n");
+			sem_post(&rendezvousP->semDeCola);
+			sem_wait(&rendezvousP->semDePedidor);
+			printf("Pase merge desde cola\n");
 			//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
-			if(rendezvous.tidDelQuePide<miTid){
+			if(rendezvousP->tidDelQuePide<miTid){
 				//en este caso muero
 				colasEspera->operator[](miTid).first.unlock();
 				//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
