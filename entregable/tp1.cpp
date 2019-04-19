@@ -285,6 +285,8 @@ void *ThreadCicle(void* inThread){
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
 
+			int otroThread = colores[nodoActual];
+
 			mergeStruct rendezvous;
 			rendezvous.tidDelQuePide = miTid;
 			//lockeamos los mutex para que funcione el rendezvous, si no pasan de largo
@@ -293,9 +295,9 @@ void *ThreadCicle(void* inThread){
 			rendezvous.mutexDePedidor.lock();
 
 			//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
-			colasEspera->operator[](colores[nodoActual]).first.lock();
-			colasEspera->operator[](colores[nodoActual]).second.push(&rendezvous);			
-			colasEspera->operator[](colores[nodoActual]).first.unlock();
+			colasEspera->operator[](otroThread).first.lock();
+			colasEspera->operator[](otroThread).second.push(&rendezvous);			
+			colasEspera->operator[](otroThread).first.unlock();
 			
 			//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 			permisoNodo->operator[](nodoActual).unlock();
@@ -304,18 +306,19 @@ void *ThreadCicle(void* inThread){
 			rendezvous.mutexDeCola.lock();
 
 			//me mergeo con el thread "colores[nodoActual]"
-			//HAGO EL MERGE
-			sumar_arbol(arbolesGenerados[miTid], arbolesGenerados[colores[nodoActual]], miTid, colores[nodoActual]);
-
-			rendezvous.mutexDePedidor.unlock();
-			rendezvous.mutexDeCola.lock();
-
-			//me fijo si soy el thread que tiene que morir
-			if (colores[nodoActual]<miTid){
-				//en este caso me mergee con alguien mas chico, y tengo que morir
-				
+			//void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir) es la función merge
+			if (otroThread<miTid){
+				//en este caso yo soy el que muere
+				sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], otroThread, miTid);
+				rendezvous.mutexDePedidor.unlock();
+				rendezvous.mutexDeCola.lock();
 				//HABRIA QUE HACER ALGO MAS ACA??
 				pthread_exit(NULL);
+			}else{
+				//en este caso yo sobrevivo
+				sumar_arbol(arbolesGenerados[miTid], arbolesGenerados[colores[nodoActual]], miTid, colores[nodoActual]);
+				rendezvous.mutexDePedidor.unlock();
+				rendezvous.mutexDeCola.lock();
 			}
 
 		}else{	
@@ -352,20 +355,16 @@ void *ThreadCicle(void* inThread){
 			//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
 			rendezvous.mutexDePedidor.lock();
 			rendezvous.mutexDeCola.unlock();
-
-			//me mergeo con el thread que me lo pidió
-			//HAGO EL MERGE
-
+			//se que en este momento el thread que me lo pidió está haciendo el merge, porque
+			//estamos en el rendezvous
 			rendezvous.mutexDePedidor.lock();
 			rendezvous.mutexDeCola.unlock();
 
 			//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
 			if(rendezvous.tidDelQuePide<miTid){
 				//en este caso muero
-
 				colasEspera->operator[](miTid).first.unlock();
 				//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
-
 				pthread_exit(NULL);
 			}
 		}
