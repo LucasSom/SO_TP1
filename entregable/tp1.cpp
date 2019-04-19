@@ -7,7 +7,7 @@
 #include <mutex>
 #include <queue>
 #include <utility>
-
+#include <semaphore.h>
 using namespace std;
 
 /////////////////////////////////////////////////////////////////
@@ -18,6 +18,7 @@ using namespace std;
 #define BLANCO -10
 #define GRIS -20
 #define NEGRO -30
+#define SHARED_SEM 1
 
 //COLORES de los nodos
 vector<int> colores;
@@ -48,8 +49,10 @@ vector<vector <int> > coloresArbol;
 
 
 typedef struct mergeStruct {
-  mutex mutexDeCola;
-  mutex mutexDePedidor;
+  //mutex mutexDeCola;
+  //mutex mutexDePedido&r;
+  sem_t semDeCola;
+  sem_t semDePedidor;
   int tidDelQuePide;
 
 } mergeStruct;
@@ -291,8 +294,10 @@ void *ThreadCicle(void* inThread){
 			rendezvous.tidDelQuePide = miTid;
 			//lockeamos los mutex para que funcione el rendezvous, si no pasan de largo
 			//es como inicializar un semaforo en cero
-			rendezvous.mutexDeCola.lock();
-			rendezvous.mutexDePedidor.lock();
+			//rendezvous.mutexDeCola.lock();
+			//rendezvous.mutexDePedidor.lock();
+			sem_init(&rendezvous.semDeCola, SHARED_SEM, 0);
+			sem_init(&rendezvous.semDePedidor, SHARED_SEM, 0);
 
 			//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
 			colasEspera->operator[](otroThread).first.lock();
@@ -301,24 +306,28 @@ void *ThreadCicle(void* inThread){
 			
 			//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 			permisoNodo->operator[](nodoActual).unlock();
+			printf("Soy pedidor \n");
+			sem_post(&rendezvous.semDePedidor);
+			sem_wait(&rendezvous.semDeCola);
 
-			rendezvous.mutexDePedidor.unlock();
-			rendezvous.mutexDeCola.lock();
-
+			//me mergeo con el thread "colores[nodoActual]"
+			//HAGO EL MERGE
+			//rendezvous.mutexDePedidor.unlock();
+			//rendezvous.mutexDeCola.lock();
 			//me mergeo con el thread "colores[nodoActual]"
 			//void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir) es la función merge
 			if (otroThread<miTid){
 				//en este caso yo soy el que muere
 				sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], otroThread, miTid);
-				rendezvous.mutexDePedidor.unlock();
-				rendezvous.mutexDeCola.lock();
+				sem_post(&rendezvous.semDePedidor);
+				sem_wait(&rendezvous.semDeCola);
 				//HABRIA QUE HACER ALGO MAS ACA??
 				pthread_exit(NULL);
 			}else{
 				//en este caso yo sobrevivo
-				sumar_arbol(arbolesGenerados[miTid], arbolesGenerados[colores[nodoActual]], miTid, colores[nodoActual]);
-				rendezvous.mutexDePedidor.unlock();
-				rendezvous.mutexDeCola.lock();
+				sumar_arbol(arbolesGenerados[miTid], arbolesGenerados[otroThread], miTid, otroThread);
+				sem_post(&rendezvous.semDePedidor);
+				sem_wait(&rendezvous.semDeCola);
 			}
 
 		}else{	
@@ -351,14 +360,14 @@ void *ThreadCicle(void* inThread){
 			mergeStruct* rendezvousP = colasEspera->operator[](miTid).second.front(); 
 			mergeStruct rendezvous;
 			colasEspera->operator[](miTid).second.pop();
-
+			printf("Soy cola \n");
 			//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
-			rendezvous.mutexDePedidor.lock();
-			rendezvous.mutexDeCola.unlock();
+			sem_post(&rendezvous.semDeCola);
+			sem_wait(&rendezvous.semDePedidor);
 			//se que en este momento el thread que me lo pidió está haciendo el merge, porque
 			//estamos en el rendezvous
-			rendezvous.mutexDePedidor.lock();
-			rendezvous.mutexDeCola.unlock();
+			sem_post(&rendezvous.semDeCola);
+			sem_wait(&rendezvous.semDePedidor);
 
 			//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
 			if(rendezvous.tidDelQuePide<miTid){
