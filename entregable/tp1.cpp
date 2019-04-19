@@ -232,6 +232,7 @@ void *ThreadCicle(void* inThread){
 
 			//me mergeo con el thread "colores[nodoActual]"
 			//HAGO EL MERGE
+			sumar_arbol(arbolesGenerados[miTid], arbolesGenerados[colores[nodoActual]], miTid, colores[nodoActual]);
 
 			rendezvous.mutexDePedidor.unlock();
 			rendezvous.mutexDeCola.lock();
