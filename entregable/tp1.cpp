@@ -193,6 +193,63 @@ void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
   }
 }
 
+void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
+
+	for (map<int,vector<Eje>>::iterator nodo_ptr = aMorir.listaDeAdyacencias.begin(); nodo_ptr != aMorir.listaDeAdyacencias.end(); ++nodo_ptr){
+		//recorre todos los nodos del arbol aMorir
+		for (vector<Eje>::iterator it = aMorir.vecinosBegin(nodo_ptr->first); it != aMorir.vecinosEnd(nodo_ptr->first); ++it){	
+			//recorre los ejes de cada nodo
+			if (nodo_ptr->first < it->nodoDestino){
+			//para evitar push_backear dos veces cada eje, solo inserto al menor
+				original.insertarEje(nodo_ptr->first, it->nodoDestino, it->peso);
+			}
+		}
+	}
+
+	for (int nodo = 0; nodo < coloresArbol[miTid].size(); ++nodo){
+		if(coloresArbol[miTid][nodo] != NEGRO){
+			if (coloresArbol[TidAMorir][nodo] == NEGRO){
+				/*En aMorir es negro pero en el original no.
+				Entonces, tengo que pintarlo de negro y actualizar la distancia*/
+				distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];//distancia va a ser IMAX
+				distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+				coloresArbol[miTid][nodo] = NEGRO;
+
+				permisoNodo->operator[](nodo).lock();
+				colores[nodo] = miTid;
+				permisoNodo->operator[](nodo).unlock();
+			}else{//ambos son blancos o grises
+				if (coloresArbol[TidAMorir][nodo] == GRIS){
+					if (coloresArbol[miTid][nodo] == GRIS){
+						/* Ambos son grises */
+						if (distanciaParal[miTid][nodo] > distanciaParal[TidAMorir][nodo]){
+							distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
+							distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+							//Ya esta de gris, no tengo que actualizar el color
+						}//ELSE: dejo como estaba
+					}else{
+						/*En el original es blanco, y en el aMorir, gris*/
+						distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
+						distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+						coloresArbol[miTid][nodo] = GRIS;
+					}
+				}//ELSE: si el nodo en el arbol de aMorir es blanco, dejo lo que esta
+			}
+		}//ELSE: si el nodo en el arbol del thread que vive es negro, no tengo que hacer nada
+	}
+
+	original.numVertices += aMorir.numVertices;
+
+	colasEspera->operator[](TidAMorir).first.lock();
+	int cantidadEncolados = colasEspera->operator[](TidAMorir).second.size();
+	//no lo hago directamente en la guarda del ciclo porque va a ir disminuyendo todo el tiempo
+	while (! colasEspera->operator[](miTid).second.empty()){
+		mergeStruct* encolado = colasEspera->operator[](TidAMorir).second.front();
+		colasEspera->operator[](TidAMorir).second.pop();
+		colasEspera->operator[](miTid).second.push(encolado);
+	}				
+	colasEspera->operator[](TidAMorir).first.unlock();//es necesario esto?
+}
 
 void *ThreadCicle(void* inThread){
 
@@ -320,64 +377,6 @@ void *ThreadCicle(void* inThread){
 
 }
 
-
-void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
-
-	for (map<int,vector<Eje>>::iterator nodo_ptr = aMorir.listaDeAdyacencias.begin(); nodo_ptr != aMorir.listaDeAdyacencias.end(); ++nodo_ptr){
-		//recorre todos los nodos del arbol aMorir
-		for (vector<Eje>::iterator it = aMorir.vecinosBegin(nodo_ptr->first); it != aMorir.vecinosEnd(nodo_ptr->first); ++it){	
-			//recorre los ejes de cada nodo
-			if (nodo_ptr->first < it->nodoDestino){
-			//para evitar push_backear dos veces cada eje, solo inserto al menor
-				original.insertarEje(nodo_ptr->first, it->nodoDestino, it->peso);
-			}
-		}
-	}
-
-	for (int nodo = 0; nodo < coloresArbol[miTid].size(); ++nodo){
-		if(coloresArbol[miTid][nodo] != NEGRO){
-			if (coloresArbol[TidAMorir][nodo] == NEGRO){
-				/*En aMorir es negro pero en el original no.
-				Entonces, tengo que pintarlo de negro y actualizar la distancia*/
-				distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];//distancia va a ser IMAX
-				distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
-				coloresArbol[miTid][nodo] = NEGRO;
-
-				permisoNodo->operator[](nodo).lock();
-				colores[nodo] = miTid;
-				permisoNodo->operator[](nodo).unlock();
-			}else{//ambos son blancos o grises
-				if (coloresArbol[TidAMorir][nodo] == GRIS){
-					if (coloresArbol[miTid][nodo] == GRIS){
-						/* Ambos son grises */
-						if (distanciaParal[miTid][nodo] > distanciaParal[TidAMorir][nodo]){
-							distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
-							distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
-							//Ya esta de gris, no tengo que actualizar el color
-						}//ELSE: dejo como estaba
-					}else{
-						/*En el original es blanco, y en el aMorir, gris*/
-						distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
-						distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
-						coloresArbol[miTid][nodo] = GRIS;
-					}
-				}//ELSE: si el nodo en el arbol de aMorir es blanco, dejo lo que esta
-			}
-		}//ELSE: si el nodo en el arbol del thread que vive es negro, no tengo que hacer nada
-	}
-
-	original.numVertices += aMorir.numVertices;
-
-	colasEspera->operator[](TidAMorir).first.lock();
-	int cantidadEncolados = colasEspera->operator[](TidAMorir).second.size();
-	//no lo hago directamente en la guarda del ciclo porque va a ir disminuyendo todo el tiempo
-	while (! colasEspera->operator[](miTid).second.empty()){
-		mergeStruct* encolado = colasEspera->operator[](TidAMorir).second.front();
-		colasEspera->operator[](TidAMorir).second.pop();
-		colasEspera->operator[](miTid).second.push(encolado);
-	}				
-	colasEspera->operator[](TidAMorir).first.unlock();//es necesario esto?
-}
 
 
 void mstParalelo(Grafo *g, int cantThreads) {
