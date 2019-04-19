@@ -8,6 +8,8 @@
 #include <queue>
 #include <utility>
 #include <semaphore.h>
+#include <unistd.h>
+
 using namespace std;
 
 /////////////////////////////////////////////////////////////////
@@ -194,7 +196,15 @@ void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
   }
 }
 
-void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
+void sumar_arbol(Grafo& original, Grafo& aMorir, int tidDelQuePide, int tidCola){
+	int TidAMorir, miTid;
+	if (tidDelQuePide < tidCola){
+		miTid = tidDelQuePide;
+		TidAMorir = tidCola;
+	}else{
+		miTid = tidCola;
+		TidAMorir = tidDelQuePide;
+	}
 
 	//al arbol privado del thread que va a sobrevivir le agregamos todos los ejes y nodos
 	//del arbol privado que va a morir. Como hasta ahora no compartían nodos sabemos que los
@@ -252,8 +262,8 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 
 	//ahora copiamos la cola de espera del thread que va a morir, por si tenía 
 	//a alguien esperando para mergearse, se lo pasa al que se lo comió
-	colasEspera->operator[](TidAMorir).first.lock();
-	colasEspera->operator[](miTid).first.lock();
+
+	colasEspera->operator[](tidDelQuePide).first.lock();
 
 	while (! colasEspera->operator[](TidAMorir).second.empty()){
 		mergeStruct* encolado = colasEspera->operator[](TidAMorir).second.front();
@@ -261,10 +271,8 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 		colasEspera->operator[](miTid).second.push(encolado);
 	}		
 
-	colasEspera->operator[](miTid).first.unlock();
+	colasEspera->operator[](tidDelQuePide).first.unlock();
 	//desbloqueamos esto aunque en teoría nunca lo volvamos a usar
-	colasEspera->operator[](TidAMorir).first.unlock(); 
-	
 }
 
 void *ThreadCicle(void* inThread){
@@ -316,7 +324,8 @@ void *ThreadCicle(void* inThread){
 			//void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir) es la función merge
 			if (otroThread<miTid){
 				//en este caso yo soy el que muere
-				sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], otroThread, miTid);
+				//sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], tidPedidor, tidDeCola);
+				sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], miTid, otroThread);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
 				printf("Pase merge siendo pedidor\n");
@@ -350,6 +359,7 @@ void *ThreadCicle(void* inThread){
 		}
 
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
+		//if (arbolMio->numVertices == 8) sleep(1); 
 		colasEspera->operator[](miTid).first.lock();
 		while(!(colasEspera->operator[](miTid).second.empty())){
 			//si tengo algo en la cola me mergeo
