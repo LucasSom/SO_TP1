@@ -376,7 +376,11 @@ void *ThreadCicle(void* inThread){
 		}
 		colasEspera->operator[](miTid).first.unlock();
 
-
+		//me fijo si ya terminé de armar el arbol generador mínimo
+		if (arbolMio->numVertices==grafoCompartido->numVertices){
+			arbolRta=arbolMio;
+			pthread_exit(NULL);
+		}
 
 		//tanto si mergee como si no, tengo que buscar el prox nodoActual
 		//Busco el nodo más cercano que no esté en el árbol, pero sea alcanzable
@@ -444,10 +448,8 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	//o que lo guarde en algún archivo junto con el tamaño del grafo
 	//y cosas así
 
-	//OJO, hay que ver donde guardamos el arbol resultado, porque ya no
-	//está en un solo lugar como el secuencial, el último thread que queda
-	//que lo sabe porque no le quedan nodos que agregar debería guardar
-	//su arbol en un arbolRta compartido
+	//el último thread que queda lo sabe porque no le quedan nodos que agregar
+	// guarda su arbol en un arbolRta compartido
 	cout << endl << "== RESULTADO == " << endl;
  	arbolRta->imprimirGrafo();
 }
