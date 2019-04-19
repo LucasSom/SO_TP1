@@ -195,6 +195,9 @@ void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
 
 void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 
+	//al arbol privado del thread que va a sobrevivir le agregamos todos los ejes y nodos
+	//del arbol privado que va a morir. Como hasta ahora no compartían nodos sabemos que los
+	//arboles son disjuntos entonces simplemente agregamos todo
 	for (map<int,vector<Eje>>::iterator nodo_ptr = aMorir.listaDeAdyacencias.begin(); nodo_ptr != aMorir.listaDeAdyacencias.end(); ++nodo_ptr){
 		//recorre todos los nodos del arbol aMorir
 		for (vector<Eje>::iterator it = aMorir.vecinosBegin(nodo_ptr->first); it != aMorir.vecinosEnd(nodo_ptr->first); ++it){	
@@ -205,12 +208,17 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 			}
 		}
 	}
+	original.numVertices += aMorir.numVertices;
 
+	//cada thread tiene su vector de colores (BLANCO,GRIS,NEGRO) para saber cuales distancias
+	//ya calculó, como el secuencial. Copiamos todos los colores y distancias del thread que muere
+	//al otro
 	for (int nodo = 0; nodo < coloresArbol[miTid].size(); ++nodo){
 		if(coloresArbol[miTid][nodo] != NEGRO){
 			if (coloresArbol[TidAMorir][nodo] == NEGRO){
 				/*En aMorir es negro pero en el original no.
-				Entonces, tengo que pintarlo de negro y actualizar la distancia*/
+				Entonces, tengo que pintarlo de negro y actualizar la distancia
+				estos van a ser los nodos que agregamos antes del arbolAMorir al arbol que vive*/
 				distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];//distancia va a ser IMAX
 				distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
 				coloresArbol[miTid][nodo] = NEGRO;
@@ -221,12 +229,13 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 			}else{//ambos son blancos o grises
 				if (coloresArbol[TidAMorir][nodo] == GRIS){
 					if (coloresArbol[miTid][nodo] == GRIS){
-						/* Ambos son grises */
+						/* Ambos son grises. Voy a querer guardar la menor distancia
+						para que luego se use la distancia efectivamente menor*/
 						if (distanciaParal[miTid][nodo] > distanciaParal[TidAMorir][nodo]){
 							distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
 							distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
 							//Ya esta de gris, no tengo que actualizar el color
-						}//ELSE: dejo como estaba
+						}//ELSE: dejo como estaba (si ya tenía la distancia menor)
 					}else{
 						/*En el original es blanco, y en el aMorir, gris*/
 						distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
@@ -236,19 +245,25 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir){
 				}//ELSE: si el nodo en el arbol de aMorir es blanco, dejo lo que esta
 			}
 		}//ELSE: si el nodo en el arbol del thread que vive es negro, no tengo que hacer nada
+			//(porque ese nodo ya está incluído en el arbol que sobrevive)
 	}
 
-	original.numVertices += aMorir.numVertices;
 
+	//ahora copiamos la cola de espera del thread que va a morir, por si tenía 
+	//a alguien esperando para mergearse, se lo pasa al que se lo comió
 	colasEspera->operator[](TidAMorir).first.lock();
-	int cantidadEncolados = colasEspera->operator[](TidAMorir).second.size();
-	//no lo hago directamente en la guarda del ciclo porque va a ir disminuyendo todo el tiempo
-	while (! colasEspera->operator[](miTid).second.empty()){
+	colasEspera->operator[](miTid).first.lock();
+
+	while (! colasEspera->operator[](TidAMorir).second.empty()){
 		mergeStruct* encolado = colasEspera->operator[](TidAMorir).second.front();
 		colasEspera->operator[](TidAMorir).second.pop();
 		colasEspera->operator[](miTid).second.push(encolado);
-	}				
-	colasEspera->operator[](TidAMorir).first.unlock();//es necesario esto?
+	}		
+
+	colasEspera->operator[](miTid).first.unlock();
+	//desbloqueamos esto aunque en teoría nunca lo volvamos a usar
+	colasEspera->operator[](TidAMorir).first.unlock(); 
+	
 }
 
 void *ThreadCicle(void* inThread){
