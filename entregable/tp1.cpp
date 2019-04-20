@@ -288,7 +288,8 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	colasEspera->operator[](tidDelQuePide).first.lock();
 	colasEspera->operator[](tidCola).first.lock();
 	while (! colasEspera->operator[](tidAMorir).second.empty()){
-		mergeStruct* encolado = colasEspera->operator[](tidAMorir).second.front();
+		mergeStruct* encolado = new mergeStruct;
+		encolado = colasEspera->operator[](tidAMorir).second.front();
 		colasEspera->operator[](tidAMorir).second.pop();
 		colasEspera->operator[](miTid).second.push(encolado);
 	}		
