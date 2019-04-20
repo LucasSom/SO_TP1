@@ -70,7 +70,6 @@ vector< pair<mutex, queue<mergeStruct*> > >* colasEspera;
 //al mutex permisoNodo[i]
 //es un puntero al vector para poder tener tamaño dinámico sin copiar mutexes
 vector<mutex>* permisoNodo;
-
 //el arbol resultado que solo modifica el thread que no le quedan
 //nodos que agregar (o sea que es el último)
 // arbolRta para devolver resultado en paralelo
@@ -303,8 +302,9 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		//agarro los dos mutex que me pasó el primer thread con el que me voy a mergear (y su tid)
 		mergeStruct* rendezvousP = colasEspera->operator[](miTid).second.front(); 
 		colasEspera->operator[](miTid).second.pop();
+		int tidDelQuePide = rendezvousP->tidDelQuePide;
 		printf("Soy cola %d con pedidor %d\n", miTid, rendezvousP->tidDelQuePide);
-		if (rendezvousP->tidDelQuePide == tidQueBusco) pudeMergearConTid = true;
+		if (tidDelQuePide == tidQueBusco) pudeMergearConTid = true;
 		//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
@@ -315,9 +315,9 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		sumar_arbol(rendezvousP->tidDelQuePide, miTid, rendezvousP->nodoFusion, rendezvousP->esPrimerNodo);
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
-		printf("Pase merge desde cola %d\n", miTid);
+		printf("Pase merge desde cola %d del pedidor %d\n", miTid, tidDelQuePide);
 		//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
-		if(rendezvousP->tidDelQuePide < miTid){
+		if(tidDelQuePide < miTid){
 			//en este caso muero
 			colasEspera->operator[](miTid).first.unlock();
 			//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
@@ -346,11 +346,11 @@ void *ThreadCicle(void* inThread){
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
 			int otroThread = colores[nodoActual];
-			permisoNodo->operator[](nodoActual).unlock();
 
 			conQuienMergeo->operator[](otroThread).first.lock();
 			int estadoOtroThread = conQuienMergeo->operator[](otroThread).second;
 			if (estadoOtroThread == miTid){
+				permisoNodo->operator[](nodoActual).unlock();
 				conQuienMergeo->operator[](otroThread).first.unlock();
 				bool seEncolo = false;
 				while(!seEncolo){
@@ -358,6 +358,7 @@ void *ThreadCicle(void* inThread){
 					seEncolo = chequeoColaPorPedidos(miTid, otroThread);
 					colasEspera->operator[](miTid).first.unlock();
 				}
+
 			}else{
 				conQuienMergeo->operator[](miTid).first.lock();
 				conQuienMergeo->operator[](miTid).second = otroThread;
@@ -377,18 +378,19 @@ void *ThreadCicle(void* inThread){
 				colasEspera->operator[](otroThread).first.lock();
 				colasEspera->operator[](otroThread).second.push(&rendezvous);			
 				colasEspera->operator[](otroThread).first.unlock();
-				
+				permisoNodo->operator[](nodoActual).unlock();
 				//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 				//permisoNodo->operator[](nodoActual).unlock();
 				printf("Soy pedidor %d cola %d \n", miTid, otroThread);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
-				printf("LLegue a merge siendo pedidor %d\n", miTid);
+				printf("LLegue a merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
 				//me mergeo con el thread "colores[nodoActual]"
 				//HAGO EL MERGE
-				printf("Paso merge siendo pedidor %d\n", miTid);
+				//printf("Paso merge siendo pedidor %d\n", miTid);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
+				printf("Paso merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
 				if (otroThread < miTid){
 					// HABRIA QUE HACER ALGO MAS ACA??
 					threadsVivos--;
@@ -424,7 +426,7 @@ void *ThreadCicle(void* inThread){
 
 		//me fijo si ya terminé de armar el arbol generador mínimo
 		if (arbolMio->numVertices == grafoCompartido->numVertices){
-			printf("TERMINEEEEEEEE \n");
+			printf("TERMINEEEEEEEE %d\n", miTid);
 			while(threadsVivos > 1){
 				colasEspera->operator[](miTid).first.lock();
 				chequeoColaPorPedidos(miTid, 0);
