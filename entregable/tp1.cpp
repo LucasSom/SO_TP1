@@ -395,7 +395,7 @@ void *ThreadCicle(void* inThread){
 		}
 
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
-		if (arbolMio->numVertices == 8) sleep(1); 
+		//if (arbolMio->numVertices == 8) sleep(1); 
 		colasEspera->operator[](miTid).first.lock();
 		chequeoColaPorPedidos(miTid);
 		colasEspera->operator[](miTid).first.unlock();
@@ -404,8 +404,6 @@ void *ThreadCicle(void* inThread){
 		if (arbolMio->numVertices == grafoCompartido->numVertices){
 			printf("TERMINEEEEEEEE \n");
 			while(threadsVivos > 1){
-				int t = threadsVivos;
-				printf("HAY %d THREADS \n", t);
 				colasEspera->operator[](miTid).first.lock();
 				chequeoColaPorPedidos(miTid);
 				colasEspera->operator[](miTid).first.unlock();
