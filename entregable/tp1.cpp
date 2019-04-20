@@ -9,6 +9,7 @@
 #include <utility>
 #include <semaphore.h>
 #include <unistd.h>
+#include <atomic>
 
 using namespace std;
 
@@ -72,7 +73,7 @@ vector<mutex>* permisoNodo;
 // grafoCompartido grafo original
 Grafo* arbolRta;
 Grafo* grafoCompartido;
-
+atomic <int> threadsVivos;
 vector<Grafo> arbolesGenerados;
 
 typedef struct inputThread {
@@ -196,6 +197,45 @@ void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
   }
 }
 
+void actualizarLogicaColores(int miTid, int tidAMorir){
+
+	for (int nodo = 0; nodo < coloresArbol[miTid].size(); ++nodo){
+		if(coloresArbol[miTid][nodo] != NEGRO){
+			if (coloresArbol[tidAMorir][nodo] == NEGRO){
+				/*En aMorir es negro pero en el original no.
+				Entonces, tengo que pintarlo de negro y actualizar la distancia
+				estos van a ser los nodos que agregamos antes del arbolAMorir al arbol que vive*/
+				distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];//distancia va a ser IMAX
+				distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
+				coloresArbol[miTid][nodo] = NEGRO;
+
+				permisoNodo->operator[](nodo).lock();
+				colores[nodo] = miTid;
+				permisoNodo->operator[](nodo).unlock();
+			}else{//ambos son blancos o grises
+				if (coloresArbol[tidAMorir][nodo] == GRIS){
+					if (coloresArbol[miTid][nodo] == GRIS){
+						/* Ambos son grises. Voy a querer guardar la menor distancia
+						para que luego se use la distancia efectivamente menor*/
+						if (distanciaParal[miTid][nodo] > distanciaParal[tidAMorir][nodo]){
+							distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];
+							distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
+							//Ya esta de gris, no tengo que actualizar el color
+						}//ELSE: dejo como estaba (si ya tenía la distancia menor)
+					}else{
+						/*En el original es blanco, y en el aMorir, gris*/
+						distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];
+						distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
+						coloresArbol[miTid][nodo] = GRIS;
+					}
+				}//ELSE: si el nodo en el arbol de aMorir es blanco, dejo lo que esta
+			}
+		}//ELSE: si el nodo en el arbol del thread que vive es negro, no tengo que hacer nada
+			//(porque ese nodo ya está incluído en el arbol que sobrevive)
+	}
+
+}
+
 void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNodo){
 	int tidAMorir, miTid;
 	Grafo* original;
@@ -234,40 +274,7 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	//cada thread tiene su vector de colores (BLANCO,GRIS,NEGRO) para saber cuales distancias
 	//ya calculó, como el secuencial. Copiamos todos los colores y distancias del thread que muere
 	//al otro
-	for (int nodo = 0; nodo < coloresArbol[miTid].size(); ++nodo){
-		if(coloresArbol[miTid][nodo] != NEGRO){
-			if (coloresArbol[tidAMorir][nodo] == NEGRO){
-				/*En aMorir es negro pero en el original no.
-				Entonces, tengo que pintarlo de negro y actualizar la distancia
-				estos van a ser los nodos que agregamos antes del arbolAMorir al arbol que vive*/
-				distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];//distancia va a ser IMAX
-				distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
-				coloresArbol[miTid][nodo] = NEGRO;
-
-				permisoNodo->operator[](nodo).lock();
-				colores[nodo] = miTid;
-				permisoNodo->operator[](nodo).unlock();
-			}else{//ambos son blancos o grises
-				if (coloresArbol[tidAMorir][nodo] == GRIS){
-					if (coloresArbol[miTid][nodo] == GRIS){
-						/* Ambos son grises. Voy a querer guardar la menor distancia
-						para que luego se use la distancia efectivamente menor*/
-						if (distanciaParal[miTid][nodo] > distanciaParal[tidAMorir][nodo]){
-							distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];
-							distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
-							//Ya esta de gris, no tengo que actualizar el color
-						}//ELSE: dejo como estaba (si ya tenía la distancia menor)
-					}else{
-						/*En el original es blanco, y en el aMorir, gris*/
-						distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];
-						distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
-						coloresArbol[miTid][nodo] = GRIS;
-					}
-				}//ELSE: si el nodo en el arbol de aMorir es blanco, dejo lo que esta
-			}
-		}//ELSE: si el nodo en el arbol del thread que vive es negro, no tengo que hacer nada
-			//(porque ese nodo ya está incluído en el arbol que sobrevive)
-	}
+	actualizarLogicaColores(miTid, tidAMorir);
 
 	//ahora copiamos la cola de espera del thread que va a morir, por si tenía 
 	//a alguien esperando para mergearse, se lo pasa al que se lo comió
@@ -282,6 +289,35 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 
 	colasEspera->operator[](tidDelQuePide).first.unlock();
 	//desbloqueamos esto aunque en teoría nunca lo volvamos a usar
+}
+
+void chequeoColaPorPedidos(int miTid){
+
+	while(!(colasEspera->operator[](miTid).second.empty())){
+		//si tengo algo en la cola me mergeo
+
+		//agarro los dos mutex que me pasó el primer thread con el que me voy a mergear (y su tid)
+		mergeStruct* rendezvousP = colasEspera->operator[](miTid).second.front(); 
+		colasEspera->operator[](miTid).second.pop();
+		printf("Soy cola %d con pedidor %d\n", miTid, rendezvousP->tidDelQuePide);
+		//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
+		sem_post(&rendezvousP->semDeCola);
+		sem_wait(&rendezvousP->semDePedidor);
+		//se que en este momento el thread que me lo pidió está haciendo el merge, porque
+		//estamos en el rendezvous
+		printf("LLegue merge desde cola %d\n", miTid);
+		sem_post(&rendezvousP->semDeCola);
+		sem_wait(&rendezvousP->semDePedidor);
+		printf("Pase merge desde cola %d\n", miTid);
+		//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
+		if(rendezvousP->tidDelQuePide < miTid){
+			//en este caso muero
+			colasEspera->operator[](miTid).first.unlock();
+			//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
+			threadsVivos--;
+			pthread_exit(NULL);
+		}
+	}
 }
 
 void *ThreadCicle(void* inThread){
@@ -320,19 +356,21 @@ void *ThreadCicle(void* inThread){
 			
 			//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 			permisoNodo->operator[](nodoActual).unlock();
-			printf("Soy pedidor \n");
+			printf("Soy pedidor %d cola %d \n", miTid, otroThread);
 			sem_post(&rendezvous.semDePedidor);
 			sem_wait(&rendezvous.semDeCola);
-			printf("LLegue a merge siendo pedidor\n");
+			printf("LLegue a merge siendo pedidor %d\n", miTid);
 			bool esPrimerNodo = i == 0;
 			//me mergeo con el thread "colores[nodoActual]"
 			//HAGO EL MERGE
 			//void sumar_arbol(tidDelQuePideMerge, tidDeCola, nodoCompartido, esPrimerNodo?) es la función merge
 			sumar_arbol(miTid, otroThread, nodoActual, esPrimerNodo);
+			printf("Paso merge siendo pedidor %d\n", miTid);
 			sem_post(&rendezvous.semDePedidor);
 			sem_wait(&rendezvous.semDeCola);
 			if (otroThread < miTid){
 				// HABRIA QUE HACER ALGO MAS ACA??
+				threadsVivos--;
 				pthread_exit(NULL);
 			}
 
@@ -357,36 +395,21 @@ void *ThreadCicle(void* inThread){
 		}
 
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
-		//if (arbolMio->numVertices == 8) sleep(1); 
+		if (arbolMio->numVertices == 8) sleep(1); 
 		colasEspera->operator[](miTid).first.lock();
-		while(!(colasEspera->operator[](miTid).second.empty())){
-			//si tengo algo en la cola me mergeo
-
-			//agarro los dos mutex que me pasó el primer thread con el que me voy a mergear (y su tid)
-			mergeStruct* rendezvousP = colasEspera->operator[](miTid).second.front(); 
-			colasEspera->operator[](miTid).second.pop();
-			printf("Soy cola \n");
-			//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
-			sem_post(&rendezvousP->semDeCola);
-			sem_wait(&rendezvousP->semDePedidor);
-			//se que en este momento el thread que me lo pidió está haciendo el merge, porque
-			//estamos en el rendezvous
-			printf("LLegue merge desde cola\n");
-			sem_post(&rendezvousP->semDeCola);
-			sem_wait(&rendezvousP->semDePedidor);
-			printf("Pase merge desde cola\n");
-			//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
-			if(rendezvousP->tidDelQuePide < miTid){
-				//en este caso muero
-				colasEspera->operator[](miTid).first.unlock();
-				//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
-				pthread_exit(NULL);
-			}
-		}
+		chequeoColaPorPedidos(miTid);
 		colasEspera->operator[](miTid).first.unlock();
 
 		//me fijo si ya terminé de armar el arbol generador mínimo
 		if (arbolMio->numVertices == grafoCompartido->numVertices){
+			printf("TERMINEEEEEEEE \n");
+			while(threadsVivos > 1){
+				int t = threadsVivos;
+				printf("HAY %d THREADS \n", t);
+				colasEspera->operator[](miTid).first.lock();
+				chequeoColaPorPedidos(miTid);
+				colasEspera->operator[](miTid).first.unlock();
+			}
 			arbolRta = arbolMio;
 			pthread_exit(NULL);
 		}
@@ -420,7 +443,7 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	vector<mutex> mutexeses(g->numVertices);
 	permisoNodo = &mutexeses;
 	grafoCompartido = g;
-
+	threadsVivos = cantThreads;
 	vector<pair<mutex, queue<mergeStruct*> > > mutexesesCola(cantThreads);
 	colasEspera = &mutexesesCola;
 
