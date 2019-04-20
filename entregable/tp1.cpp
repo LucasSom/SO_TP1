@@ -51,12 +51,14 @@ vector<vector <int> > distanciaParal;
 vector<vector <int> > distanciaNodoParal;
 // Colores de los nodos para arbol del thread i
 vector<vector <int> > coloresArbol;
-vector<pair <mutex, int> >* historial;
+vector<pair <mutex, int> >* conQuienMergeo;
 
 typedef struct mergeStruct {
   sem_t semDeCola;
   sem_t semDePedidor;
   int tidDelQuePide;
+  int nodoFusion;
+  bool esPrimerNodo;
 
 } mergeStruct;
 
@@ -293,8 +295,8 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	//desbloqueamos esto aunque en teoría nunca lo volvamos a usar
 }
 
-void chequeoColaPorPedidos(int miTid, bool unlockeo){
-
+bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
+	bool pudeMergearConTid = false;
 	while(!(colasEspera->operator[](miTid).second.empty())){
 		//si tengo algo en la cola me mergeo
 
@@ -302,12 +304,15 @@ void chequeoColaPorPedidos(int miTid, bool unlockeo){
 		mergeStruct* rendezvousP = colasEspera->operator[](miTid).second.front(); 
 		colasEspera->operator[](miTid).second.pop();
 		printf("Soy cola %d con pedidor %d\n", miTid, rendezvousP->tidDelQuePide);
+		if (rendezvousP->tidDelQuePide == tidQueBusco) pudeMergearConTid = true;
 		//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
 		//se que en este momento el thread que me lo pidió está haciendo el merge, porque
 		//estamos en el rendezvous
 		printf("LLegue merge desde cola %d\n", miTid);
+		//void sumar_arbol(tidDelQuePideMerge, tidDeCola, nodoCompartido, esPrimerNodo?) es la función merge
+		sumar_arbol(rendezvousP->tidDelQuePide, miTid, rendezvousP->nodoFusion, rendezvousP->esPrimerNodo);
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
 		printf("Pase merge desde cola %d\n", miTid);
@@ -320,6 +325,7 @@ void chequeoColaPorPedidos(int miTid, bool unlockeo){
 			pthread_exit(NULL);
 		}
 	}
+	return pudeMergearConTid;
 }
 
 void *ThreadCicle(void* inThread){
@@ -342,22 +348,25 @@ void *ThreadCicle(void* inThread){
 			int otroThread = colores[nodoActual];
 			permisoNodo->operator[](nodoActual).unlock();
 
-			historial->operator[](otroThread).first.lock();
-			int estadoOtroThread = historial->operator[](otroThread).second;
+			conQuienMergeo->operator[](otroThread).first.lock();
+			int estadoOtroThread = conQuienMergeo->operator[](otroThread).second;
 			if (estadoOtroThread == miTid){
-				historial->operator[](otroThread).first.unlock();
-				while(true){
+				conQuienMergeo->operator[](otroThread).first.unlock();
+				bool seEncolo = false;
+				while(!seEncolo){
 					colasEspera->operator[](miTid).first.lock();
-					chequeoColaPorPedidos(miTid, true);
+					seEncolo = chequeoColaPorPedidos(miTid, otroThread);
 					colasEspera->operator[](miTid).first.unlock();
 				}
 			}else{
-				historial->operator[](miTid).first.lock();
-				historial->operator[](miTid).second = otroThread;
-				historial->operator[](miTid).first.unlock();
-				historial->operator[](otroThread).first.unlock();
+				conQuienMergeo->operator[](miTid).first.lock();
+				conQuienMergeo->operator[](miTid).second = otroThread;
+				conQuienMergeo->operator[](miTid).first.unlock();
+				conQuienMergeo->operator[](otroThread).first.unlock();
 				mergeStruct rendezvous;
 				rendezvous.tidDelQuePide = miTid;
+				rendezvous.nodoFusion = nodoActual;
+				rendezvous.esPrimerNodo = i == 0;
 				//lockeamos los mutex para que funcione el rendezvous, si no pasan de largo
 				//es como inicializar un semaforo en cero
 
@@ -375,11 +384,8 @@ void *ThreadCicle(void* inThread){
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
 				printf("LLegue a merge siendo pedidor %d\n", miTid);
-				bool esPrimerNodo = i == 0;
 				//me mergeo con el thread "colores[nodoActual]"
 				//HAGO EL MERGE
-				//void sumar_arbol(tidDelQuePideMerge, tidDeCola, nodoCompartido, esPrimerNodo?) es la función merge
-				sumar_arbol(miTid, otroThread, nodoActual, esPrimerNodo);
 				printf("Paso merge siendo pedidor %d\n", miTid);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
@@ -413,7 +419,7 @@ void *ThreadCicle(void* inThread){
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
 		//if (arbolMio->numVertices == 8) sleep(1); 
 		colasEspera->operator[](miTid).first.lock();
-		chequeoColaPorPedidos(miTid, false);
+		chequeoColaPorPedidos(miTid, 0);
 		colasEspera->operator[](miTid).first.unlock();
 
 		//me fijo si ya terminé de armar el arbol generador mínimo
@@ -421,7 +427,7 @@ void *ThreadCicle(void* inThread){
 			printf("TERMINEEEEEEEE \n");
 			while(threadsVivos > 1){
 				colasEspera->operator[](miTid).first.lock();
-				chequeoColaPorPedidos(miTid, false);
+				chequeoColaPorPedidos(miTid, 0);
 				colasEspera->operator[](miTid).first.unlock();
 			}
 			arbolRta = arbolMio;
@@ -463,11 +469,11 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	vector<pair<mutex, queue<mergeStruct*> > > mutexesesCola(cantThreads);
 	colasEspera = &mutexesesCola;
 
-	vector<pair <mutex, int> > historialAux(cantThreads);
+	vector<pair <mutex, int> > conQuienMergeoAux(cantThreads);
 	for (int i = 0; i < cantThreads; ++i){
-		historialAux[i].second = VIVO;
+		conQuienMergeoAux[i].second = VIVO;
 	}
-	historial = &historialAux;
+	conQuienMergeo = &conQuienMergeoAux;
 
 	//Por ahora no colorié ninguno de los nodos
 	colores.assign(g->numVertices,BLANCO);
