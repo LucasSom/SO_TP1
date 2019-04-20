@@ -196,61 +196,71 @@ void pintarVecinosParalelo(Grafo *miArbol, int num, int miTid){
   }
 }
 
-void sumar_arbol(Grafo& original, Grafo& aMorir, int tidDelQuePide, int tidCola){
-	int TidAMorir, miTid;
+void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNodo){
+	int tidAMorir, miTid;
+	Grafo* original;
+	Grafo* aMorir;
 	if (tidDelQuePide < tidCola){
 		miTid = tidDelQuePide;
-		TidAMorir = tidCola;
+		tidAMorir = tidCola;
 	}else{
 		miTid = tidCola;
-		TidAMorir = tidDelQuePide;
+		tidAMorir = tidDelQuePide;
 	}
+	original = &arbolesGenerados[miTid];
+	aMorir = &arbolesGenerados[tidAMorir];
 
 	//al arbol privado del thread que va a sobrevivir le agregamos todos los ejes y nodos
 	//del arbol privado que va a morir. Como hasta ahora no compartían nodos sabemos que los
 	//arboles son disjuntos entonces simplemente agregamos todo
-	for (map<int,vector<Eje>>::iterator nodo_ptr = aMorir.listaDeAdyacencias.begin(); nodo_ptr != aMorir.listaDeAdyacencias.end(); ++nodo_ptr){
+	for (map<int,vector<Eje>>::iterator nodo_ptr = aMorir->listaDeAdyacencias.begin(); nodo_ptr != aMorir->listaDeAdyacencias.end(); ++nodo_ptr){
 		//recorre todos los nodos del arbol aMorir
-		for (vector<Eje>::iterator it = aMorir.vecinosBegin(nodo_ptr->first); it != aMorir.vecinosEnd(nodo_ptr->first); ++it){	
+		for (vector<Eje>::iterator it = aMorir->vecinosBegin(nodo_ptr->first); it != aMorir->vecinosEnd(nodo_ptr->first); ++it){	
 			//recorre los ejes de cada nodo
 			if (nodo_ptr->first < it->nodoDestino){
 			//para evitar push_backear dos veces cada eje, solo inserto al menor
-				original.insertarEje(nodo_ptr->first, it->nodoDestino, it->peso);
+				original->insertarEje(nodo_ptr->first, it->nodoDestino, it->peso);
 			}
 		}
 	}
-	original.numVertices += aMorir.numVertices;
-
+	original->numVertices += aMorir->numVertices;
+	if (!esPrimerNodo){
+		if(distanciaParal[tidAMorir][nodoActual] < distanciaParal[miTid][nodoActual]){
+			distanciaParal[miTid][nodoActual] = distanciaParal[tidAMorir][nodoActual];
+			distanciaNodoParal[miTid][nodoActual] = distanciaNodoParal[tidAMorir][nodoActual];
+		}
+		original->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
+	}
 	//cada thread tiene su vector de colores (BLANCO,GRIS,NEGRO) para saber cuales distancias
 	//ya calculó, como el secuencial. Copiamos todos los colores y distancias del thread que muere
 	//al otro
 	for (int nodo = 0; nodo < coloresArbol[miTid].size(); ++nodo){
 		if(coloresArbol[miTid][nodo] != NEGRO){
-			if (coloresArbol[TidAMorir][nodo] == NEGRO){
+			if (coloresArbol[tidAMorir][nodo] == NEGRO){
 				/*En aMorir es negro pero en el original no.
 				Entonces, tengo que pintarlo de negro y actualizar la distancia
 				estos van a ser los nodos que agregamos antes del arbolAMorir al arbol que vive*/
-				distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];//distancia va a ser IMAX
-				distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+				distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];//distancia va a ser IMAX
+				distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
 				coloresArbol[miTid][nodo] = NEGRO;
 
 				permisoNodo->operator[](nodo).lock();
 				colores[nodo] = miTid;
 				permisoNodo->operator[](nodo).unlock();
 			}else{//ambos son blancos o grises
-				if (coloresArbol[TidAMorir][nodo] == GRIS){
+				if (coloresArbol[tidAMorir][nodo] == GRIS){
 					if (coloresArbol[miTid][nodo] == GRIS){
 						/* Ambos son grises. Voy a querer guardar la menor distancia
 						para que luego se use la distancia efectivamente menor*/
-						if (distanciaParal[miTid][nodo] > distanciaParal[TidAMorir][nodo]){
-							distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
-							distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+						if (distanciaParal[miTid][nodo] > distanciaParal[tidAMorir][nodo]){
+							distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];
+							distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
 							//Ya esta de gris, no tengo que actualizar el color
 						}//ELSE: dejo como estaba (si ya tenía la distancia menor)
 					}else{
 						/*En el original es blanco, y en el aMorir, gris*/
-						distanciaParal[miTid][nodo] = distanciaParal[TidAMorir][nodo];
-						distanciaNodoParal[miTid][nodo] = distanciaNodoParal[TidAMorir][nodo];
+						distanciaParal[miTid][nodo] = distanciaParal[tidAMorir][nodo];
+						distanciaNodoParal[miTid][nodo] = distanciaNodoParal[tidAMorir][nodo];
 						coloresArbol[miTid][nodo] = GRIS;
 					}
 				}//ELSE: si el nodo en el arbol de aMorir es blanco, dejo lo que esta
@@ -259,15 +269,14 @@ void sumar_arbol(Grafo& original, Grafo& aMorir, int tidDelQuePide, int tidCola)
 			//(porque ese nodo ya está incluído en el arbol que sobrevive)
 	}
 
-
 	//ahora copiamos la cola de espera del thread que va a morir, por si tenía 
 	//a alguien esperando para mergearse, se lo pasa al que se lo comió
 
 	colasEspera->operator[](tidDelQuePide).first.lock();
 
-	while (! colasEspera->operator[](TidAMorir).second.empty()){
-		mergeStruct* encolado = colasEspera->operator[](TidAMorir).second.front();
-		colasEspera->operator[](TidAMorir).second.pop();
+	while (! colasEspera->operator[](tidAMorir).second.empty()){
+		mergeStruct* encolado = colasEspera->operator[](tidAMorir).second.front();
+		colasEspera->operator[](tidAMorir).second.pop();
 		colasEspera->operator[](miTid).second.push(encolado);
 	}		
 
@@ -300,8 +309,7 @@ void *ThreadCicle(void* inThread){
 			rendezvous.tidDelQuePide = miTid;
 			//lockeamos los mutex para que funcione el rendezvous, si no pasan de largo
 			//es como inicializar un semaforo en cero
-			//rendezvous.mutexDeCola.lock();
-			//rendezvous.mutexDePedidor.lock();
+
 			sem_init(&rendezvous.semDeCola, SHARED_SEM, 0);
 			sem_init(&rendezvous.semDePedidor, SHARED_SEM, 0);
 
@@ -316,26 +324,16 @@ void *ThreadCicle(void* inThread){
 			sem_post(&rendezvous.semDePedidor);
 			sem_wait(&rendezvous.semDeCola);
 			printf("LLegue a merge siendo pedidor\n");
+			bool esPrimerNodo = i == 0;
 			//me mergeo con el thread "colores[nodoActual]"
 			//HAGO EL MERGE
-			//rendezvous.mutexDePedidor.unlock();
-			//rendezvous.mutexDeCola.lock();
-			//me mergeo con el thread "colores[nodoActual]"
-			//void sumar_arbol(Grafo& original, Grafo& aMorir, int miTid, int TidAMorir) es la función merge
-			if (otroThread<miTid){
-				//en este caso yo soy el que muere
-				//sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], tidPedidor, tidDeCola);
-				sumar_arbol(arbolesGenerados[otroThread], arbolesGenerados[miTid], miTid, otroThread);
-				sem_post(&rendezvous.semDePedidor);
-				sem_wait(&rendezvous.semDeCola);
-				printf("Pase merge siendo pedidor\n");
-				//HABRIA QUE HACER ALGO MAS ACA??
+			//void sumar_arbol(tidDelQuePideMerge, tidDeCola, nodoCompartido, esPrimerNodo?) es la función merge
+			sumar_arbol(miTid, otroThread, nodoActual, esPrimerNodo);
+			sem_post(&rendezvous.semDePedidor);
+			sem_wait(&rendezvous.semDeCola);
+			if (otroThread < miTid){
+				// HABRIA QUE HACER ALGO MAS ACA??
 				pthread_exit(NULL);
-			}else{
-				//en este caso yo sobrevivo
-				sumar_arbol(arbolesGenerados[miTid], arbolesGenerados[otroThread], miTid, otroThread);
-				sem_post(&rendezvous.semDePedidor);
-				sem_wait(&rendezvous.semDeCola);
 			}
 
 		}else{	
@@ -378,7 +376,7 @@ void *ThreadCicle(void* inThread){
 			sem_wait(&rendezvousP->semDePedidor);
 			printf("Pase merge desde cola\n");
 			//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
-			if(rendezvousP->tidDelQuePide<miTid){
+			if(rendezvousP->tidDelQuePide < miTid){
 				//en este caso muero
 				colasEspera->operator[](miTid).first.unlock();
 				//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
@@ -388,8 +386,8 @@ void *ThreadCicle(void* inThread){
 		colasEspera->operator[](miTid).first.unlock();
 
 		//me fijo si ya terminé de armar el arbol generador mínimo
-		if (arbolMio->numVertices==grafoCompartido->numVertices){
-			arbolRta=arbolMio;
+		if (arbolMio->numVertices == grafoCompartido->numVertices){
+			arbolRta = arbolMio;
 			pthread_exit(NULL);
 		}
 
@@ -462,6 +460,7 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	//el último thread que queda lo sabe porque no le quedan nodos que agregar
 	// guarda su arbol en un arbolRta compartido
 	cout << endl << "== RESULTADO == " << endl;
+	cout << "Peso total = " << arbolRta->pesoTotal() << endl;
  	arbolRta->imprimirGrafo();
 }
 
