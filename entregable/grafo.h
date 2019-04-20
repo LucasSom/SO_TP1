@@ -36,6 +36,7 @@ public:
   vector<Eje>::iterator vecinosBegin(int num);
   vector<Eje>::iterator vecinosEnd(int num);
   void insertarEje(int nodoA, int nodoB, int peso);
+  double pesoTotal();
 private:
   void incrementarTotalEjes();
 };

@@ -60,6 +60,20 @@ void Grafo::incrementarTotalEjes(){
   numEjes += 1;
 }
 
+double Grafo::pesoTotal(){
+  // Double por si falla algo y da con coma, pa ver 
+  double peso = 0;
+
+  for (map<int,vector<Eje>>::iterator nodo_ptr = listaDeAdyacencias.begin(); nodo_ptr != listaDeAdyacencias.end(); ++nodo_ptr){
+    //recorre todos los nodos del arbol
+    for (vector<Eje>::iterator it = vecinosBegin(nodo_ptr->first); it != vecinosEnd(nodo_ptr->first); ++it){  
+      //recorre los ejes de cada nodo
+      peso += it->peso; 
+    }
+  }
+  return peso/2;
+}
+
 void Grafo::imprimirGrafo() {
   cout << "Cantidad de nodos: " << numVertices << endl;
   cout << "Cantidad de ejes: " << numEjes << endl;
