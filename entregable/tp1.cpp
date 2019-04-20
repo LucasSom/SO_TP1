@@ -23,6 +23,7 @@ using namespace std;
 #define NEGRO -30
 #define SHARED_SEM 1
 #define VIVO -2
+#define NADIE -2
 #define MUERTO -1
 
 //COLORES de los nodos
@@ -52,6 +53,7 @@ vector<vector <int> > distanciaNodoParal;
 // Colores de los nodos para arbol del thread i
 vector<vector <int> > coloresArbol;
 vector<pair <mutex, int> >* conQuienMergeo;
+vector<pair <mutex, int> >* historial;
 
 typedef struct mergeStruct {
   sem_t semDeCola;
@@ -320,6 +322,9 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		if(rendezvousP->tidDelQuePide < miTid){
 			//en este caso muero
 			colasEspera->operator[](miTid).first.unlock();
+			historial->operator[](miTid).first.lock();
+			historial->operator[](miTid).second = MUERTO;
+			historial->operator[](miTid).first.unlock();
 			//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
 			threadsVivos--;
 			pthread_exit(NULL);
@@ -347,53 +352,76 @@ void *ThreadCicle(void* inThread){
 		if(colores[nodoActual]!=BLANCO){
 			int otroThread = colores[nodoActual];
 			permisoNodo->operator[](nodoActual).unlock();
+			if (miTid < otroThread){
+				bool encontre = false;
 
-			conQuienMergeo->operator[](otroThread).first.lock();
-			int estadoOtroThread = conQuienMergeo->operator[](otroThread).second;
-			if (estadoOtroThread == miTid){
-				conQuienMergeo->operator[](otroThread).first.unlock();
-				bool seEncolo = false;
-				while(!seEncolo){
-					colasEspera->operator[](miTid).first.lock();
-					seEncolo = chequeoColaPorPedidos(miTid, otroThread);
-					colasEspera->operator[](miTid).first.unlock();
+				while(!encontre){
+					colasEspera->operator[](otroThread).first.lock();
+					historial->operator[](otroThread).first.lock();
+					if (historial->operator[](otroThread).second == NADIE){
+						//o sea nadie se lo comio, quiero que me coma
+						encontre = true;
+					}else{
+						if (historial->operator[](otroThread).second == MUERTO){
+							//Aca no se q queremos hacer en realidad, en realidad si esta bien hecho esto no pasa
+							colasEspera->operator[](otroThread).first.unlock();
+							historial->operator[](otroThread).first.unlock();	
+
+							historial->operator[](miTid).first.lock();	
+							historial->operator[](miTid).second = MUERTO;
+							historial->operator[](miTid).first.unlock();							
+							threadsVivos--;
+							pthread_exit(NULL);
+						}
+						//Representa a un nodo, tengo que buscar quien se lo comio
+						int temp = otroThread;
+						otroThread = historial->operator[](otroThread).second;
+						colasEspera->operator[](temp).first.unlock();
+						historial->operator[](temp).first.unlock();
+					}
+				}
+				if (miTid < otroThread){
+					mergeStruct rendezvous;
+					rendezvous.tidDelQuePide = miTid;
+					rendezvous.nodoFusion = nodoActual;
+					rendezvous.esPrimerNodo = i == 0;
+
+					sem_init(&rendezvous.semDeCola, SHARED_SEM, 0);
+					sem_init(&rendezvous.semDePedidor, SHARED_SEM, 0);
+
+					//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
+					//colasEspera->operator[](otroThread).first.lock();
+					colasEspera->operator[](otroThread).second.push(&rendezvous);	
+					// me voy a comer al otro thread
+					historial->operator[](otroThread).second = miTid;		
+					colasEspera->operator[](otroThread).first.unlock();
+					historial->operator[](otroThread).first.unlock();
+					//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
+					//permisoNodo->operator[](nodoActual).unlock();
+					printf("Soy pedidor %d cola %d \n", miTid, otroThread);
+					sem_post(&rendezvous.semDePedidor);
+					sem_wait(&rendezvous.semDeCola);
+					printf("LLegue a merge siendo pedidor %d\n", miTid);
+					//me mergeo con el thread "colores[nodoActual]"
+					//HAGO EL MERGE
+					printf("Paso merge siendo pedidor %d\n", miTid);
+					sem_post(&rendezvous.semDePedidor);
+					sem_wait(&rendezvous.semDeCola);
+				}else{
+					// esperar a que mergee otroThread
 				}
 			}else{
-				conQuienMergeo->operator[](miTid).first.lock();
-				conQuienMergeo->operator[](miTid).second = otroThread;
-				conQuienMergeo->operator[](miTid).first.unlock();
-				conQuienMergeo->operator[](otroThread).first.unlock();
-				mergeStruct rendezvous;
-				rendezvous.tidDelQuePide = miTid;
-				rendezvous.nodoFusion = nodoActual;
-				rendezvous.esPrimerNodo = i == 0;
-				//lockeamos los mutex para que funcione el rendezvous, si no pasan de largo
-				//es como inicializar un semaforo en cero
+				//tendria q poner aca que el otro me va a comer? 
+				// semaforos y bla
 
-				sem_init(&rendezvous.semDeCola, SHARED_SEM, 0);
-				sem_init(&rendezvous.semDePedidor, SHARED_SEM, 0);
 
-				//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
-				colasEspera->operator[](otroThread).first.lock();
-				colasEspera->operator[](otroThread).second.push(&rendezvous);			
-				colasEspera->operator[](otroThread).first.unlock();
-				
-				//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
-				//permisoNodo->operator[](nodoActual).unlock();
-				printf("Soy pedidor %d cola %d \n", miTid, otroThread);
-				sem_post(&rendezvous.semDePedidor);
-				sem_wait(&rendezvous.semDeCola);
-				printf("LLegue a merge siendo pedidor %d\n", miTid);
-				//me mergeo con el thread "colores[nodoActual]"
-				//HAGO EL MERGE
-				printf("Paso merge siendo pedidor %d\n", miTid);
-				sem_post(&rendezvous.semDePedidor);
-				sem_wait(&rendezvous.semDeCola);
-				if (otroThread < miTid){
-					// HABRIA QUE HACER ALGO MAS ACA??
-					threadsVivos--;
-					pthread_exit(NULL);
-				}
+				//Soy el de mayor tid, muero
+				//Como me comieron ya esta actualizado del historial
+				historial->operator[](miTid).first.lock();
+				historial->operator[](miTid).second = MUERTO;
+				historial->operator[](miTid).first.unlock();
+				threadsVivos--;
+				pthread_exit(NULL);
 			}
 
 		}else{	
@@ -474,6 +502,12 @@ void mstParalelo(Grafo *g, int cantThreads) {
 		conQuienMergeoAux[i].second = VIVO;
 	}
 	conQuienMergeo = &conQuienMergeoAux;
+
+	vector<pair <mutex, int> > historialAux(cantThreads);
+	for (int i = 0; i < cantThreads; ++i){
+		historialAux[i].second = NADIE;
+	}
+	historial = &historialAux;
 
 	//Por ahora no colorié ninguno de los nodos
 	colores.assign(g->numVertices,BLANCO);
