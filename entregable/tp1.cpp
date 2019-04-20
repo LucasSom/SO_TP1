@@ -22,6 +22,8 @@ using namespace std;
 #define GRIS -20
 #define NEGRO -30
 #define SHARED_SEM 1
+#define VIVO -2
+#define MUERTO -1
 
 //COLORES de los nodos
 vector<int> colores;
@@ -49,7 +51,7 @@ vector<vector <int> > distanciaParal;
 vector<vector <int> > distanciaNodoParal;
 // Colores de los nodos para arbol del thread i
 vector<vector <int> > coloresArbol;
-
+vector<pair <mutex, int> >* historial;
 
 typedef struct mergeStruct {
   sem_t semDeCola;
@@ -291,7 +293,7 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	//desbloqueamos esto aunque en teoría nunca lo volvamos a usar
 }
 
-void chequeoColaPorPedidos(int miTid){
+void chequeoColaPorPedidos(int miTid, bool unlockeo){
 
 	while(!(colasEspera->operator[](miTid).second.empty())){
 		//si tengo algo en la cola me mergeo
@@ -333,45 +335,59 @@ void *ThreadCicle(void* inThread){
 	Grafo* arbolMio = &(arbolesGenerados[miTid]);
 
 	for(int i = 0; i < grafoCompartido->numVertices; i++){
-
 		//me aseguro que nadie esté tocando este nodo compartido
 		permisoNodo->operator[](nodoActual).lock();
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
-
 			int otroThread = colores[nodoActual];
-
-			mergeStruct rendezvous;
-			rendezvous.tidDelQuePide = miTid;
-			//lockeamos los mutex para que funcione el rendezvous, si no pasan de largo
-			//es como inicializar un semaforo en cero
-
-			sem_init(&rendezvous.semDeCola, SHARED_SEM, 0);
-			sem_init(&rendezvous.semDePedidor, SHARED_SEM, 0);
-
-			//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
-			colasEspera->operator[](otroThread).first.lock();
-			colasEspera->operator[](otroThread).second.push(&rendezvous);			
-			colasEspera->operator[](otroThread).first.unlock();
-			
-			//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 			permisoNodo->operator[](nodoActual).unlock();
-			printf("Soy pedidor %d cola %d \n", miTid, otroThread);
-			sem_post(&rendezvous.semDePedidor);
-			sem_wait(&rendezvous.semDeCola);
-			printf("LLegue a merge siendo pedidor %d\n", miTid);
-			bool esPrimerNodo = i == 0;
-			//me mergeo con el thread "colores[nodoActual]"
-			//HAGO EL MERGE
-			//void sumar_arbol(tidDelQuePideMerge, tidDeCola, nodoCompartido, esPrimerNodo?) es la función merge
-			sumar_arbol(miTid, otroThread, nodoActual, esPrimerNodo);
-			printf("Paso merge siendo pedidor %d\n", miTid);
-			sem_post(&rendezvous.semDePedidor);
-			sem_wait(&rendezvous.semDeCola);
-			if (otroThread < miTid){
-				// HABRIA QUE HACER ALGO MAS ACA??
-				threadsVivos--;
-				pthread_exit(NULL);
+
+			historial->operator[](otroThread).first.lock();
+			int estadoOtroThread = historial->operator[](otroThread).second;
+			if (estadoOtroThread == miTid){
+				historial->operator[](otroThread).first.unlock();
+				while(true){
+					colasEspera->operator[](miTid).first.lock();
+					chequeoColaPorPedidos(miTid, true);
+					colasEspera->operator[](miTid).first.unlock();
+				}
+			}else{
+				historial->operator[](miTid).first.lock();
+				historial->operator[](miTid).second = otroThread;
+				historial->operator[](miTid).first.unlock();
+				historial->operator[](otroThread).first.unlock();
+				mergeStruct rendezvous;
+				rendezvous.tidDelQuePide = miTid;
+				//lockeamos los mutex para que funcione el rendezvous, si no pasan de largo
+				//es como inicializar un semaforo en cero
+
+				sem_init(&rendezvous.semDeCola, SHARED_SEM, 0);
+				sem_init(&rendezvous.semDePedidor, SHARED_SEM, 0);
+
+				//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
+				colasEspera->operator[](otroThread).first.lock();
+				colasEspera->operator[](otroThread).second.push(&rendezvous);			
+				colasEspera->operator[](otroThread).first.unlock();
+				
+				//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
+				//permisoNodo->operator[](nodoActual).unlock();
+				printf("Soy pedidor %d cola %d \n", miTid, otroThread);
+				sem_post(&rendezvous.semDePedidor);
+				sem_wait(&rendezvous.semDeCola);
+				printf("LLegue a merge siendo pedidor %d\n", miTid);
+				bool esPrimerNodo = i == 0;
+				//me mergeo con el thread "colores[nodoActual]"
+				//HAGO EL MERGE
+				//void sumar_arbol(tidDelQuePideMerge, tidDeCola, nodoCompartido, esPrimerNodo?) es la función merge
+				sumar_arbol(miTid, otroThread, nodoActual, esPrimerNodo);
+				printf("Paso merge siendo pedidor %d\n", miTid);
+				sem_post(&rendezvous.semDePedidor);
+				sem_wait(&rendezvous.semDeCola);
+				if (otroThread < miTid){
+					// HABRIA QUE HACER ALGO MAS ACA??
+					threadsVivos--;
+					pthread_exit(NULL);
+				}
 			}
 
 		}else{	
@@ -397,7 +413,7 @@ void *ThreadCicle(void* inThread){
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
 		//if (arbolMio->numVertices == 8) sleep(1); 
 		colasEspera->operator[](miTid).first.lock();
-		chequeoColaPorPedidos(miTid);
+		chequeoColaPorPedidos(miTid, false);
 		colasEspera->operator[](miTid).first.unlock();
 
 		//me fijo si ya terminé de armar el arbol generador mínimo
@@ -405,7 +421,7 @@ void *ThreadCicle(void* inThread){
 			printf("TERMINEEEEEEEE \n");
 			while(threadsVivos > 1){
 				colasEspera->operator[](miTid).first.lock();
-				chequeoColaPorPedidos(miTid);
+				chequeoColaPorPedidos(miTid, false);
 				colasEspera->operator[](miTid).first.unlock();
 			}
 			arbolRta = arbolMio;
@@ -437,13 +453,21 @@ void mstParalelo(Grafo *g, int cantThreads) {
 
 	// Arreglo para crear threads
 	pthread_t thread[cantThreads];
-
+	// Mutexeses para pintar nodos de a uno
 	vector<mutex> mutexeses(g->numVertices);
 	permisoNodo = &mutexeses;
 	grafoCompartido = g;
 	threadsVivos = cantThreads;
+
+	//Cola de pedidos de merge
 	vector<pair<mutex, queue<mergeStruct*> > > mutexesesCola(cantThreads);
 	colasEspera = &mutexesesCola;
+
+	vector<pair <mutex, int> > historialAux(cantThreads);
+	for (int i = 0; i < cantThreads; ++i){
+		historialAux[i].second = VIVO;
+	}
+	historial = &historialAux;
 
 	//Por ahora no colorié ninguno de los nodos
 	colores.assign(g->numVertices,BLANCO);
