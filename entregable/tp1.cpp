@@ -293,10 +293,10 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	while (! colasEspera->operator[](tidAMorir).second.empty()){
 		printf("ENTREEEEEEEEEEEE \n");
 		mergeStruct* encolado = new mergeStruct;
-		encolado = colasEspera->operator[](tidAMorir).second.front();
 		aBorrar_permiso.lock();
 		aBorrar.push_back(encolado);
 		aBorrar_permiso.unlock();
+		encolado = colasEspera->operator[](tidAMorir).second.front();
 		colasEspera->operator[](tidAMorir).second.pop();
 		colasEspera->operator[](miTid).second.push(encolado);
 	}		
