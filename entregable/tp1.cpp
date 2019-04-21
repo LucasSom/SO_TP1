@@ -78,6 +78,7 @@ Grafo* arbolRta;
 Grafo* grafoCompartido;
 atomic <int> threadsVivos;
 vector<Grafo> arbolesGenerados;
+vector<mergeStruct *> aBorrar;
 
 typedef struct inputThread {
   int threadId;
@@ -288,8 +289,10 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	colasEspera->operator[](tidDelQuePide).first.lock();
 	colasEspera->operator[](tidCola).first.lock();
 	while (! colasEspera->operator[](tidAMorir).second.empty()){
+		printf("ENTREEEEEEEEEEEE \n");
 		mergeStruct* encolado = new mergeStruct;
 		encolado = colasEspera->operator[](tidAMorir).second.front();
+		aBorrar.push_back(encolado);
 		colasEspera->operator[](tidAMorir).second.pop();
 		colasEspera->operator[](miTid).second.push(encolado);
 	}		
@@ -426,7 +429,7 @@ void *ThreadCicle(void* inThread){
 		}
 
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
-		//if (arbolMio->numVertices == 8) sleep(1); 
+		//if (arbolMio->numVertices == 6) sleep(1); 
 		chequeoColaPorPedidos(miTid, 0);
 
 		//me fijo si ya terminé de armar el arbol generador mínimo
@@ -511,6 +514,9 @@ void mstParalelo(Grafo *g, int cantThreads) {
     for (int x = 0; x < cantThreads; ++x){
         pthread_join(thread[x], NULL);
     }
+    for(int i = 0; i < aBorrar.size(); i++){
+    	delete aBorrar[i];
+    }
 	//podríamos agregar que imprima el tiempo que tardó para medirlo,
 	//o que lo guarde en algún archivo junto con el tamaño del grafo
 	//y cosas así
@@ -547,6 +553,7 @@ int main(int argc, char const * argv[]) {
 	  	//o comparar con el secuencial, no siempre con el paralelo
 
 		//Corro el algoirtmo secuencial de g
+
 		mstParalelo(&g, cantThreads);
 		//mstSecuencial(&g);
 
