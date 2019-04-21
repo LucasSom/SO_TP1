@@ -53,6 +53,8 @@ vector<vector <int> > distanciaNodoParal;
 vector<vector <int> > coloresArbol;
 vector<pair <mutex, int> >* conQuienMergeo;
 
+//Logica de mergeStruct
+
 typedef struct mergeStruct {
   sem_t semDeCola;
   sem_t semDePedidor;
@@ -61,7 +63,8 @@ typedef struct mergeStruct {
   bool esPrimerNodo;
 
 } mergeStruct;
-
+vector<mergeStruct *> aBorrar;
+mutex aBorrar_permiso;
 //colasEspera[i] es la cola en la que el thread i ve si alguien pidió un merge
 //colasEspera[i] también tiene un mutex para que la cola no se rompa por la concurrencia
 vector< pair<mutex, queue<mergeStruct*> > >* colasEspera;
@@ -78,7 +81,6 @@ Grafo* arbolRta;
 Grafo* grafoCompartido;
 atomic <int> threadsVivos;
 vector<Grafo> arbolesGenerados;
-vector<mergeStruct *> aBorrar;
 
 typedef struct inputThread {
   int threadId;
@@ -292,7 +294,9 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 		printf("ENTREEEEEEEEEEEE \n");
 		mergeStruct* encolado = new mergeStruct;
 		encolado = colasEspera->operator[](tidAMorir).second.front();
+		aBorrar_permiso.lock();
 		aBorrar.push_back(encolado);
+		aBorrar_permiso.unlock();
 		colasEspera->operator[](tidAMorir).second.pop();
 		colasEspera->operator[](miTid).second.push(encolado);
 	}		
