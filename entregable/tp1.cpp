@@ -288,20 +288,26 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	//ahora copiamos la cola de espera del thread que va a morir, por si tenía 
 	//a alguien esperando para mergearse, se lo pasa al que se lo comió
 
-	colasEspera->operator[](tidDelQuePide).first.lock();
-	colasEspera->operator[](tidCola).first.lock();
+	colasEspera->operator[](tidAMorir).first.lock();
+	colasEspera->operator[](miTid).first.lock();
 	while (! colasEspera->operator[](tidAMorir).second.empty()){
 		printf("ENTREEEEEEEEEEEE \n");
 		mergeStruct* encolado = new mergeStruct;
 		aBorrar_permiso.lock();
 		aBorrar.push_back(encolado);
 		aBorrar_permiso.unlock();
+
 		encolado = colasEspera->operator[](tidAMorir).second.front();
 		colasEspera->operator[](tidAMorir).second.pop();
+
+		conQuienMergeo->operator[](encolado->tidDelQuePide).first.lock();
+		conQuienMergeo->operator[](encolado->tidDelQuePide).second = miTid;
+		conQuienMergeo->operator[](encolado->tidDelQuePide).first.unlock();
+
 		colasEspera->operator[](miTid).second.push(encolado);
 	}		
-	colasEspera->operator[](tidCola).first.unlock();
-	colasEspera->operator[](tidDelQuePide).first.unlock();
+	colasEspera->operator[](tidAMorir).first.unlock();
+	colasEspera->operator[](miTid).first.unlock();
 	printf("TERMINE MERGE\n");
 	//desbloqueamos esto aunque en teoría nunca lo volvamos a usar
 }
@@ -326,7 +332,7 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		//estamos en el rendezvous
 		printf("LLegue merge desde cola %d\n", miTid);
 		//void sumar_arbol(tidDelQuePideMerge, tidDeCola, nodoCompartido, esPrimerNodo?) es la función merge
-		sumar_arbol(rendezvousP->tidDelQuePide, miTid, rendezvousP->nodoFusion, rendezvousP->esPrimerNodo);
+		sumar_arbol(tidDelQuePide, miTid, rendezvousP->nodoFusion, rendezvousP->esPrimerNodo);
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
 		printf("Pase merge desde cola %d del pedidor %d\n", miTid, tidDelQuePide);
@@ -404,6 +410,9 @@ void *ThreadCicle(void* inThread){
 				//printf("Paso merge siendo pedidor %d\n", miTid);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
+				conQuienMergeo->operator[](miTid).first.lock();
+				otroThread = conQuienMergeo->operator[](miTid).second;
+				conQuienMergeo->operator[](miTid).first.unlock();
 				printf("Paso merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
 				if (otroThread < miTid){
 					// HABRIA QUE HACER ALGO MAS ACA??
