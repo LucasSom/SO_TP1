@@ -578,8 +578,23 @@ int main(int argc, char const * argv[]) {
   }else{	
 	  if( g.inicializar(nombre) == 1){
 
-		//Corro el algoirtmo secuencial de g
-		mstParalelo(&g, cantThreads);
+		vector<double> tiempos;
+	  	for (int veces = 0; veces < 50; ++veces){
+	  		time_t tInicial, tFinal;
+			time(&tInicial);
+			mstParalelo(&g, cantThreads);
+			time(&tFinal);
+			if (tFinal>tInicial){
+				tiempos.push_back(tFinal-tInicial);
+			}
+			
+	  	}
+	  	double accumulate=0;
+	  	for (std::vector<double>::iterator it = tiempos.begin(); it != tiempos.end(); ++it)	{
+	  		accumulate+= *(it);
+	  	}
+	  	double average = accumulate/tiempos.size();
+	  	cout<<"Tiempo con "<<cantThreads<<" threads: "<<average<<endl;
 
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
