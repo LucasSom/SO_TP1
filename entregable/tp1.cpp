@@ -443,7 +443,7 @@ void *ThreadCicle(void* inThread){
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
 		}
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
-		if (arbolMio->numVertices == 1) sleep(0.3); 
+		//if (arbolMio->numVertices == 1) sleep(0.3); 
 
 		chequeoColaPorPedidos(miTid, 0);
 		//printf("Tengo %d nodos , mitid %d\n", arbolMio->numVertices, miTid);
@@ -577,24 +577,25 @@ int main(int argc, char const * argv[]) {
 	  }
   }else{	
 	  if( g.inicializar(nombre) == 1){
+	  	mstParalelo(&g, cantThreads);
 
-		vector<double> tiempos;
-	  	for (int veces = 0; veces < 50; ++veces){
-	  		time_t tInicial, tFinal;
-			time(&tInicial);
-			mstParalelo(&g, cantThreads);
-			time(&tFinal);
-			if (tFinal>tInicial){
-				tiempos.push_back(tFinal-tInicial);
-			}
+		// vector<double> tiempos;
+	 //  	for (int veces = 0; veces < 50; ++veces){
+	 //  		time_t tInicial, tFinal;
+		// 	time(&tInicial);
+		// 	mstParalelo(&g, cantThreads);
+		// 	time(&tFinal);
+		// 	if (tFinal>tInicial){
+		// 		tiempos.push_back(tFinal-tInicial);
+		// 	}
 			
-	  	}
-	  	double accumulate=0;
-	  	for (std::vector<double>::iterator it = tiempos.begin(); it != tiempos.end(); ++it)	{
-	  		accumulate+= *(it);
-	  	}
-	  	double average = accumulate/tiempos.size();
-	  	cout<<"Tiempo con "<<cantThreads<<" threads: "<<average<<endl;
+	 //  	}
+	 //  	double accumulate=0;
+	 //  	for (std::vector<double>::iterator it = tiempos.begin(); it != tiempos.end(); ++it)	{
+	 //  		accumulate+= *(it);
+	 //  	}
+	 //  	double average = accumulate/tiempos.size();
+	 //  	cout<<"Tiempo con "<<cantThreads<<" threads: "<<average<<endl;
 
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
