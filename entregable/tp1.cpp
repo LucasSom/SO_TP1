@@ -356,7 +356,7 @@ void *ThreadCicle(void* inThread){
 	//Arbol propio
 	Grafo* arbolMio = &(arbolesGenerados[miTid]);
 
-	for(int i = 0; i < grafoCompartido->numVertices; i++){
+	for(int i = 0; arbolMio->numVertices < grafoCompartido->numVertices; i++){
 		//me aseguro que nadie esté tocando este nodo compartido
 		printf("Pinto nodo %d de peso %d, mitid %d\n", nodoActual, distanciaParal[miTid][nodoActual], miTid);
 
@@ -443,28 +443,21 @@ void *ThreadCicle(void* inThread){
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
 		//if (miTid > 1) sleep(0.3); 
 		chequeoColaPorPedidos(miTid, 0);
-		//printf("Tengo %d nodos , mitid %d\n", arbolMio->numVertices, miTid);
-		//me fijo si ya terminé de armar el arbol generador mínimo
-		if (arbolMio->numVertices == grafoCompartido->numVertices){
-			printf("TERMINEEEEEEEE %d\n", miTid);
-			while(threadsVivos > 1){
-				chequeoColaPorPedidos(miTid, 0);
-			}
-			arbolRta = arbolMio;
-			pthread_exit(NULL);
-		}
+		printf("Tengo %d nodos , mitid %d\n", arbolMio->numVertices, miTid);
+
 		//tanto si mergee como si no, tengo que buscar el prox nodoActual
 		//Busco el nodo más cercano que no esté en el árbol, pero sea alcanzable
 		nodoActual = min_element(distanciaParal[miTid].begin(),distanciaParal[miTid].end()) - distanciaParal[miTid].begin();
 	}
 
-	//TO DO, creo que nunca va a llegar acá, porque en realidad ningún thread "agrega a mano" los n nodos, porque muchos
-	//los consigue por merge, entonces hay que agregar un break adentro del for si no le quedan nodos que agregar
-	// Si llegue aca, es el resultado (unico thread que queda)
+	// Si llegue aca, es el resultado. Podrian haber threads vivos esperando mergearse conmigo o con otros.
+	printf("TERMINEEEEEEEE %d\n", miTid);
+	while(threadsVivos > 1){
+		chequeoColaPorPedidos(miTid, 0);
+	}
 	arbolRta = arbolMio;
 	cout << "llegue al final" << endl;
-	return NULL;
-
+	pthread_exit(NULL);
 }
 
 
