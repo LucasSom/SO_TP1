@@ -270,21 +270,18 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 		}
 	}
 	original->numVertices += aMorir->numVertices;
+
 	if (!esPrimerNodo){
-		if(distanciaParal[tidAMorir][nodoActual] < distanciaParal[miTid][nodoActual]){
-			distanciaParal[miTid][nodoActual] = distanciaParal[tidAMorir][nodoActual];
-			distanciaNodoParal[miTid][nodoActual] = distanciaNodoParal[tidAMorir][nodoActual];
-		}
-		original->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
+		original->insertarEje(nodoActual,distanciaNodoParal[tidDelQuePide][nodoActual],distanciaParal[tidDelQuePide][nodoActual]);
 	}
+
 	//cada thread tiene su vector de colores (BLANCO,GRIS,NEGRO) para saber cuales distancias
 	//ya calculó, como el secuencial. Copiamos todos los colores y distancias del thread que muere
 	//al otro
 	printf("actualizo\n");
-	//colasEspera->operator[](tidCola).first.unlock();
 	actualizarLogicaColores(miTid, tidAMorir);
-	//colasEspera->operator[](tidCola).first.lock();
 	printf("actualice\n");
+
 	//ahora copiamos la cola de espera del thread que va a morir, por si tenía 
 	//a alguien esperando para mergearse, se lo pasa al que se lo comió
 
@@ -326,6 +323,7 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		printf("Soy cola %d con pedidor %d\n", miTid, rendezvousP->tidDelQuePide);
 		if (tidDelQuePide == tidQueBusco) pudeMergearConTid = true;
 		//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
+		//printf("Nodo fusion %d\n", rendezvousP->nodoFusion);
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
 		//se que en este momento el thread que me lo pidió está haciendo el merge, porque
@@ -336,8 +334,9 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
 		printf("Pase merge desde cola %d del pedidor %d\n", miTid, tidDelQuePide);
-		//rendezvous.tidDelQuePide es el Tid del thread que se unió conmigo
+		//tidDelQuePide es el Tid del thread que se unió conmigo
 		if(tidDelQuePide < miTid){
+			printf("Muero y soy %d, mori ante %d\n", miTid, tidDelQuePide);
 			//en este caso muero
 			//colasEspera->operator[](miTid).first.unlock();
 			//se supone que esta cola no se vuelve a tocar igual, porque ya no hay nodos con este color, pero por las dudas
@@ -364,15 +363,20 @@ void *ThreadCicle(void* inThread){
 
 	for(int i = 0; i < grafoCompartido->numVertices; i++){
 		//me aseguro que nadie esté tocando este nodo compartido
+		printf("Pinto nodo %d de peso %d, mitid %d\n", nodoActual, distanciaParal[miTid][nodoActual], miTid);
+
 		permisoNodo->operator[](nodoActual).lock();
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
 			int otroThread = colores[nodoActual];
-
+			printf("Nodo %d, mitid %d otro tid %d \n", nodoActual, miTid, otroThread);
+			conQuienMergeo->operator[](miTid).first.lock();
 			conQuienMergeo->operator[](otroThread).first.lock();
 			int estadoOtroThread = conQuienMergeo->operator[](otroThread).second;
 			if (estadoOtroThread == miTid){
+				printf("Me choque con uno soy %d contra %d\n", miTid, otroThread);
 				permisoNodo->operator[](nodoActual).unlock();
+				conQuienMergeo->operator[](miTid).first.unlock();
 				conQuienMergeo->operator[](otroThread).first.unlock();
 				bool seEncolo = false;
 				while(!seEncolo){
@@ -380,7 +384,6 @@ void *ThreadCicle(void* inThread){
 				}
 
 			}else{
-				conQuienMergeo->operator[](miTid).first.lock();
 				conQuienMergeo->operator[](miTid).second = otroThread;
 				conQuienMergeo->operator[](miTid).first.unlock();
 				conQuienMergeo->operator[](otroThread).first.unlock();
@@ -401,10 +404,10 @@ void *ThreadCicle(void* inThread){
 				permisoNodo->operator[](nodoActual).unlock();
 				//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 				//permisoNodo->operator[](nodoActual).unlock();
-				printf("Soy pedidor %d cola %d \n", miTid, otroThread);
+				//printf("Soy pedidor %d cola %d \n", miTid, otroThread);
 				sem_post(&rendezvous.semDePedidor);
 				sem_wait(&rendezvous.semDeCola);
-				printf("LLegue a merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
+				//printf("LLegue a merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
 				//me mergeo con el thread "colores[nodoActual]"
 				//HAGO EL MERGE
 				//printf("Paso merge siendo pedidor %d\n", miTid);
@@ -413,9 +416,10 @@ void *ThreadCicle(void* inThread){
 				conQuienMergeo->operator[](miTid).first.lock();
 				otroThread = conQuienMergeo->operator[](miTid).second;
 				conQuienMergeo->operator[](miTid).first.unlock();
-				printf("Paso merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
+				//printf("Paso merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
 				if (otroThread < miTid){
 					// HABRIA QUE HACER ALGO MAS ACA??
+					//printf("MUERO Y SOY %d, mori ante %d\n", miTid, otroThread);
 					threadsVivos--;
 					pthread_exit(NULL);
 				}
@@ -423,13 +427,11 @@ void *ThreadCicle(void* inThread){
 
 		}else{	
 			//este camino es si todo sale bien como el secuencial
-
 			//Lo pinto de NEGRO para marcar que lo agregué al árbol y borro la distancia
 			pintarNodoParareloAux(nodoActual, miTid);			
 			permisoNodo->operator[](nodoActual).unlock();
 
 			arbolMio->numVertices += 1;
-
 			//La primera vez no lo agrego porque necesito dos nodos para unir
 			if(i > 0){
 				arbolMio->insertarEje(nodoActual,distanciaNodoParal[miTid][nodoActual],distanciaParal[miTid][nodoActual]);
@@ -440,11 +442,11 @@ void *ThreadCicle(void* inThread){
 			//Descubrir vecinos: los pinto y calculo distancias
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
 		}
-
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
-		//if (arbolMio->numVertices == 6) sleep(1); 
-		chequeoColaPorPedidos(miTid, 0);
+		if (arbolMio->numVertices == 1) sleep(0.3); 
 
+		chequeoColaPorPedidos(miTid, 0);
+		//printf("Tengo %d nodos , mitid %d\n", arbolMio->numVertices, miTid);
 		//me fijo si ya terminé de armar el arbol generador mínimo
 		if (arbolMio->numVertices == grafoCompartido->numVertices){
 			printf("TERMINEEEEEEEE %d\n", miTid);
