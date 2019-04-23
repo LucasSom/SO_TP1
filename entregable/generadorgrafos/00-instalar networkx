@@ -1,0 +1,4 @@
+#Tienen q tener pip o pip3 instalado
+#pueden elegir pip o pip3 dependiendo si usan python2 o 3 (usen 3)
+pip install networkx --user
+pip3 install networkx --user
