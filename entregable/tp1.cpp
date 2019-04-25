@@ -277,9 +277,9 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	//cada thread tiene su vector de colores (BLANCO,GRIS,NEGRO) para saber cuales distancias
 	//ya calculó, como el secuencial. Copiamos todos los colores y distancias del thread que muere
 	//al otro
-	printf("actualizo\n");
+	//printf("actualizo\n");
 	actualizarLogicaColores(miTid, tidAMorir);
-	printf("actualice\n");
+	//printf("actualice\n");
 
 	//ahora copiamos la cola de espera del thread que va a morir, por si tenía 
 	//a alguien esperando para mergearse, se lo pasa al que se lo comió
@@ -287,7 +287,7 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	colasEspera->operator[](tidAMorir).first.lock();
 	colasEspera->operator[](miTid).first.lock();
 	while (! colasEspera->operator[](tidAMorir).second.empty()){
-		printf("ENTREEEEEEEEEEEE \n");
+		//printf("ENTREEEEEEEEEEEE \n");
 		mergeStruct* encolado = colasEspera->operator[](tidAMorir).second.front();
 		colasEspera->operator[](tidAMorir).second.pop();
 		conQuienMergeo->operator[](encolado->tidDelQuePide).first.lock();
@@ -298,7 +298,7 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	}		
 	colasEspera->operator[](tidAMorir).first.unlock();
 	colasEspera->operator[](miTid).first.unlock();
-	printf("TERMINE MERGE\n");
+	//printf("TERMINE MERGE\n");
 	//desbloqueamos esto aunque en teoría nunca lo volvamos a usar
 }
 
@@ -313,25 +313,25 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		colasEspera->operator[](miTid).first.unlock();
 		int tidDelQuePide = rendezvousP->tidDelQuePide;
 
-		printf("Soy cola %d con pedidor %d\n", miTid, rendezvousP->tidDelQuePide);
+		//printf("Soy cola %d con pedidor %d\n", miTid, rendezvousP->tidDelQuePide);
 		if (tidDelQuePide == tidQueBusco) pudeMergearConTid = true;
 		//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
-		printf("Nodo fusion %d\n", rendezvousP->nodoFusion);
+		//printf("Nodo fusion %d\n", rendezvousP->nodoFusion);
 		sem_post(&rendezvousP->semDeCola);
-		printf("Di señal de q soy cola %d\n", miTid);
+		//printf("Di señal de q soy cola %d\n", miTid);
 		sem_wait(&rendezvousP->semDePedidor);
 		//se que en este momento el thread que me lo pidió está haciendo el merge, porque
 		//estamos en el rendezvous
-		printf("LLegue merge desde cola %d\n", miTid);
+		//printf("LLegue merge desde cola %d\n", miTid);
 		//void sumar_arbol(tidDelQuePideMerge, tidDeCola, nodoCompartido, esPrimerNodo?) es la función merge
 		sumar_arbol(tidDelQuePide, miTid, rendezvousP->nodoFusion, rendezvousP->esPrimerNodo);
-		printf("1)Pase merge desde cola %d del pedidor %d\n", miTid, tidDelQuePide);
+		//printf("1)Pase merge desde cola %d del pedidor %d\n", miTid, tidDelQuePide);
 		sem_wait(&rendezvousP->semDePedidor);
 		sem_post(&rendezvousP->semDeCola);
-		printf("2)Pase semaforos merge desde cola %d del pedidor %d\n", miTid, tidDelQuePide);
+		//printf("2)Pase semaforos merge desde cola %d del pedidor %d\n", miTid, tidDelQuePide);
 		//tidDelQuePide es el Tid del thread que se unió conmigo
 		if(tidDelQuePide < miTid){
-			printf("Muero y soy %d, mori ante %d\n", miTid, tidDelQuePide);
+			//printf("Muero y soy %d, mori ante %d\n", miTid, tidDelQuePide);
 			//en este caso muero
 			threadsVivos--;
 			pthread_exit(NULL);
@@ -340,6 +340,21 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 	}
 	colasEspera->operator[](miTid).first.unlock();
 	return pudeMergearConTid;
+}
+
+void lockConQuienMergeo(int miTid, int otroThread){
+	if (miTid < otroThread){
+		conQuienMergeo->operator[](miTid).first.lock();
+		conQuienMergeo->operator[](otroThread).first.lock();
+	}else{
+		conQuienMergeo->operator[](otroThread).first.lock();
+		conQuienMergeo->operator[](miTid).first.lock();		
+	}
+}
+
+void unlockConQuienMergeo(int miTid, int otroThread){
+	conQuienMergeo->operator[](miTid).first.unlock();
+	conQuienMergeo->operator[](otroThread).first.unlock();
 }
 
 void *ThreadCicle(void* inThread){
@@ -356,67 +371,72 @@ void *ThreadCicle(void* inThread){
 
 	for(int i = 0; arbolMio->numVertices < grafoCompartido->numVertices; i++){
 		//me aseguro que nadie esté tocando este nodo compartido
-		printf("Pinto nodo %d de peso %d, mitid %d\n", nodoActual, distanciaParal[miTid][nodoActual], miTid);
+		//printf("Pinto nodo %d de peso %d, mitid %d\n", nodoActual, distanciaParal[miTid][nodoActual], miTid);
 
 		permisoNodo->operator[](nodoActual).lock();
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
 			int otroThread = colores[nodoActual];
-			printf("Nodo %d, mitid %d otro tid %d \n", nodoActual, miTid, otroThread);
-			conQuienMergeo->operator[](miTid).first.lock();
-			conQuienMergeo->operator[](otroThread).first.lock();
+			// Voy a lockear mutexeses para saber si el otro thread ya pidio merge conmigo (caso circular)
+			lockConQuienMergeo(miTid, otroThread);
+
 			int estadoOtroThread = conQuienMergeo->operator[](otroThread).second;
 			if (estadoOtroThread == miTid){
-				printf("Me choque con uno soy %d contra %d\n", miTid, otroThread);
+				//caso circular
+				// Libero nodo
 				permisoNodo->operator[](nodoActual).unlock();
-				conQuienMergeo->operator[](miTid).first.unlock();
-				conQuienMergeo->operator[](otroThread).first.unlock();
+				// Unlockeo mutexeses
+				unlockConQuienMergeo(miTid, otroThread);
+				// Espero a que el thread que pidio encolarse conmigo se encole
 				bool seEncolo = false;
 				while(!seEncolo){
 					seEncolo = chequeoColaPorPedidos(miTid, otroThread);
 				}
-
+				// Si sobrevivo al merge, sigo ejecutando
 			}else{
+				// Aviso que me estoy mergeando con otroThread
 				conQuienMergeo->operator[](miTid).second = otroThread;
-				conQuienMergeo->operator[](miTid).first.unlock();
-				conQuienMergeo->operator[](otroThread).first.unlock();
-				//mergeStruct rendezvous;
+				// Unlockeo mutexeses
+				unlockConQuienMergeo(miTid, otroThread);
+				// Armo mergeStruct
 				mergeStruct* rendezvous = new mergeStruct;
 				rendezvous->tidDelQuePide = miTid;
 				rendezvous->nodoFusion = nodoActual;
+				// Si es la primera iteracion, no pinte ningun nodo
 				rendezvous->esPrimerNodo = i == 0;
-				//Inicializamos los semaforos en cero
 
+				//Inicializamos los semaforos en cero
 				sem_init(&rendezvous->semDeCola, SHARED_SEM, 0);
 				sem_init(&rendezvous->semDePedidor, SHARED_SEM, 0);
 
-				//le aviso al thread "colores[nodoActual]" que estoy esperando para mergearme
+				// Le aviso al otroThread que estoy esperando para mergearme
 				colasEspera->operator[](otroThread).first.lock();
 				colasEspera->operator[](otroThread).second.push(rendezvous);			
 				colasEspera->operator[](otroThread).first.unlock();
+
+				// Ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
 				permisoNodo->operator[](nodoActual).unlock();
-				//ahora que ya le dije al thread que me quiero mergear, suelto el nodo del grafo compartido
-				printf("Soy pedidor %d cola %d \n", miTid, otroThread);
+
 				sem_post(&rendezvous->semDePedidor);
 				sem_wait(&rendezvous->semDeCola);
 				
-				//me mergeo con el thread "colores[nodoActual]"
-				printf("LLegue a merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
-
 				sem_post(&rendezvous->semDePedidor);
-				printf("Pase mi sem de pedidor %d, cola de %d\n", miTid, otroThread);
+				//printf("Pase mi sem de pedidor %d, cola de %d\n", miTid, otroThread);
 				sem_wait(&rendezvous->semDeCola);
 
 				sem_destroy(&rendezvous->semDePedidor);
 				sem_destroy(&rendezvous->semDeCola);
+
+				// Me fijo con quien me mergee finalmente para ver si muero
 				conQuienMergeo->operator[](miTid).first.lock();
 				otroThread = conQuienMergeo->operator[](miTid).second;
 				conQuienMergeo->operator[](miTid).first.unlock();
-				//printf("Paso merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
+
+				////printf("Paso merge siendo pedidor %d, cola de %d\n", miTid, otroThread);
+				// Libero memoria pedida del rendez-vous
 				delete rendezvous;
 				if (otroThread < miTid){
-					// HABRIA QUE HACER ALGO MAS ACA??
-					printf("MUERO Y SOY %d, mori ante %d\n", miTid, otroThread);
+					//printf("MUERO Y SOY %d, mori ante %d\n", miTid, otroThread);
 					threadsVivos--;
 					pthread_exit(NULL);
 				}
@@ -441,7 +461,7 @@ void *ThreadCicle(void* inThread){
 		}
 		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
 		chequeoColaPorPedidos(miTid, 0);
-		printf("Tengo %d nodos , mitid %d\n", arbolMio->numVertices, miTid);
+		//printf("Tengo %d nodos , mitid %d\n", arbolMio->numVertices, miTid);
 
 		//tanto si mergee como si no, tengo que buscar el prox nodoActual
 		//Busco el nodo más cercano que no esté en el árbol, pero sea alcanzable
@@ -449,7 +469,7 @@ void *ThreadCicle(void* inThread){
 	}
 
 	// Si llegue aca, es el resultado. Podrian haber threads vivos esperando mergearse conmigo o con otros.
-	printf("TERMINEEEEEEEE %d\n", miTid);
+	//printf("TERMINEEEEEEEE %d\n", miTid);
 	while(threadsVivos > 1){
 		chequeoColaPorPedidos(miTid, 0);
 	}
@@ -558,7 +578,10 @@ int main(int argc, char const * argv[]) {
 	  }
   }else{	
 	  if( g.inicializar(nombre) == 1){
-	  	mstParalelo(&g, cantThreads);
+	  	for (int i = 0; i < 5000; i++){
+	  		mstParalelo(&g, cantThreads);
+	  	}
+
 	  	/*
 		vector<double> tiempos;
 	  	for (int veces = 0; veces < 50; ++veces){
