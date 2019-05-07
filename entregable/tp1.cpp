@@ -22,8 +22,7 @@ using namespace std;
 #define GRIS -20
 #define NEGRO -30
 #define SHARED_SEM 1
-#define VIVO -2
-#define MUERTO -1
+#define NADIE -2
 
 //COLORES de los nodos
 vector<int> colores;
@@ -52,6 +51,7 @@ vector<vector <int> > distanciaNodoParal;
 // Colores de los nodos para arbol del thread i
 vector<vector <int> > coloresArbol;
 vector<pair <mutex, int> >* conQuienMergeo;
+mutex conQuienMergeoPermiso;
 
 //Logica de mergeStruct
 
@@ -80,7 +80,7 @@ Grafo* arbolRta;
 Grafo* grafoCompartido;
 atomic <int> threadsVivos;
 vector<Grafo> arbolesGenerados;
-
+int nroThreads;
 typedef struct inputThread {
   int threadId;
   int nodoInicialRandom;
@@ -302,6 +302,28 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 	//desbloqueamos esto aunque en teoría nunca lo volvamos a usar
 }
 
+bool chequeoCircular(int miTid, int otroThread){
+	bool visitados[nroThreads] = {0};
+	bool termine = false;
+	int esCasoCircular = false;
+	visitados[miTid] = true;
+
+	while (otroThread != NADIE and !termine){
+		int temp = otroThread;
+		if (visitados[temp]){
+			if (temp == miTid)
+				esCasoCircular = true;
+			termine = true;
+		}else{
+			visitados[temp] = true;
+			conQuienMergeo->operator[](temp).first.lock();
+			otroThread = conQuienMergeo->operator[](temp).second;
+			conQuienMergeo->operator[](temp).first.unlock();
+		}
+	}
+	return esCasoCircular;
+}
+
 bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 	bool pudeMergearConTid = false;
 	colasEspera->operator[](miTid).first.lock();
@@ -377,28 +399,15 @@ void *ThreadCicle(void* inThread){
 		//si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
 			int otroThread = colores[nodoActual];
-			// Voy a lockear mutexeses para saber si el otro thread ya pidio merge conmigo (caso circular)
-			lockConQuienMergeo(miTid, otroThread);
 
-			int estadoOtroThread = conQuienMergeo->operator[](otroThread).second;
-			if (estadoOtroThread == miTid){
-				//caso circular
-				// Libero nodo
-				permisoNodo->operator[](nodoActual).unlock();
-				// Unlockeo mutexeses
-				unlockConQuienMergeo(miTid, otroThread);
-				// Espero a que el thread que pidio encolarse conmigo se encole
-				bool seEncolo = false;
-				while(!seEncolo){
-					seEncolo = chequeoColaPorPedidos(miTid, otroThread);
-				}
-				// Si sobrevivo al merge, sigo ejecutando
-			}else{
-				// Aviso que me estoy mergeando con otroThread
-				conQuienMergeo->operator[](miTid).second = otroThread;
-				// Unlockeo mutexeses
-				unlockConQuienMergeo(miTid, otroThread);
-				// Armo mergeStruct
+			conQuienMergeoPermiso.lock();
+			bool esCasoCircular = chequeoCircular(miTid, otroThread);
+			conQuienMergeo->operator[](miTid).first.lock();
+			conQuienMergeo->operator[](miTid).second = otroThread;
+			conQuienMergeo->operator[](miTid).first.unlock();
+			conQuienMergeoPermiso.unlock();
+
+			if(!esCasoCircular){
 				mergeStruct* rendezvous = new mergeStruct;
 				rendezvous->tidDelQuePide = miTid;
 				rendezvous->nodoFusion = nodoActual;
@@ -440,6 +449,12 @@ void *ThreadCicle(void* inThread){
 					threadsVivos--;
 					pthread_exit(NULL);
 				}
+			}else{
+				permisoNodo->operator[](nodoActual).unlock();
+				bool seEncolo = false;
+				while(!seEncolo){
+					seEncolo = chequeoColaPorPedidos(miTid, otroThread);
+				}				
 			}
 
 		}else{	
@@ -480,7 +495,7 @@ void *ThreadCicle(void* inThread){
 
 void mstParalelo(Grafo *g, int cantThreads) {
 	//Imprimo el grafo
-	g->imprimirGrafo();
+	//g->imprimirGrafo();
 
 	//Semilla random
 	srand(time(0));
@@ -492,6 +507,7 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	permisoNodo = &mutexeses;
 	grafoCompartido = g;
 	threadsVivos = cantThreads;
+	nroThreads = cantThreads;
 
 	//Cola de pedidos de merge
 	vector<pair<mutex, queue<mergeStruct*> > > mutexesesCola(cantThreads);
@@ -499,7 +515,7 @@ void mstParalelo(Grafo *g, int cantThreads) {
 
 	vector<pair <mutex, int> > conQuienMergeoAux(cantThreads);
 	for (int i = 0; i < cantThreads; ++i){
-		conQuienMergeoAux[i].second = VIVO;
+		conQuienMergeoAux[i].second = NADIE;
 	}
 	conQuienMergeo = &conQuienMergeoAux;
 
@@ -541,7 +557,7 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	// guarda su arbol en un arbolRta compartido
 	cout << endl << "== RESULTADO == " << endl;
 	cout << "Peso total = " << arbolRta->pesoTotal() << endl;
- 	arbolRta->imprimirGrafo();
+ 	//arbolRta->imprimirGrafo();
 }
 
 /////////////////////////////////////////////////////////////////7
@@ -578,8 +594,11 @@ int main(int argc, char const * argv[]) {
 	  }
   }else{	
 	  if( g.inicializar(nombre) == 1){
-	  	for (int i = 0; i < 5000; i++){
-	  		mstParalelo(&g, cantThreads);
+	  	for (int i = 4; i < g.numVertices-2; i++){
+	  		for(int j = 0; j < 5000; j++){			
+	  			cout << "nro threads = " << i << "iteracion nro = " << j <<  endl;
+	  			mstParalelo(&g, i);
+	  		}
 	  	}
 
 	  	/*
