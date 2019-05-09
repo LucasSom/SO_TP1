@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <atomic>
 #include <assert.h>
+#include <chrono>
 
 using namespace std;
 
@@ -125,9 +126,9 @@ void pintarVecinos(Grafo *g, int num){
   }
 }
 
-void mstSecuencial(Grafo *g){
+double mstSecuencial(Grafo *g){
   //Imprimo el grafo
-  g->imprimirGrafo();
+  //g->imprimirGrafo();
 
   //INICIALIZO
   //Semilla random
@@ -161,8 +162,9 @@ void mstSecuencial(Grafo *g){
 	nodoActual = min_element(distancia.begin(),distancia.end()) - distancia.begin();
   }
 
-  cout << endl << "== RESULTADO == " << endl;
-  arbol.imprimirGrafo();
+  //cout << endl << "== RESULTADO == " << endl;
+  //arbol.imprimirGrafo();
+  return arbol.pesoTotal();
 }
 
 /////////////////////////////////////////////////////////////////7
@@ -490,7 +492,7 @@ void *ThreadCicle(void* inThread){
 		chequeoColaPorPedidos(miTid, 0);
 	}
 	arbolRta = arbolMio;
-	cout << "llegue al final" << endl;
+	//cout << "llegue al final" << endl;
 	pthread_exit(NULL);
 }
 
@@ -556,8 +558,8 @@ int mstParalelo(Grafo *g, int cantThreads) {
 
 	//el último thread que queda lo sabe porque no le quedan nodos que agregar
 	// guarda su arbol en un arbolRta compartido
-	cout << endl << "== RESULTADO == " << endl;
-	cout << "Peso total = " << arbolRta->pesoTotal() << endl;
+	//cout << endl << "== RESULTADO == " << endl;
+	//cout << "Peso total = " << arbolRta->pesoTotal() << endl;
  	//arbolRta->imprimirGrafo();
  	return arbolRta->pesoTotal();
 }
@@ -597,37 +599,64 @@ int main(int argc, char const * argv[]) {
   }else{	
 	  if( g.inicializar(nombre) == 1){
 	  	int rta=-1;
+	  	
 	  	for (int i = 4; i < g.numVertices-2; i++){
-	  		for(int j = 0; j < 500; j++){			
+	  		vector<double> tiemposParal;
+	  		vector<double> tiemposSecu;
+	  		for(int j = 0; j < 10; j++){			
 	  			cout << "nro threads = " << i << "iteracion nro = " << j <<  endl;
-	  			int aux = mstParalelo(&g,i);
-	  			if(rta!=-1 && rta!=aux){
-	  				cerr<<"error me dio mal el AGM"<<endl;
-	  				assert(false);
-	  			}
-	  			rta = aux;
+	  			
+	  			for (int z = 0; z < 10; ++z){
+
+					std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+					for (int x = 0; x < 5; ++x){
+						int aux;
+						if(z<5){
+							aux = mstParalelo(&g,i);	
+						}else{
+							aux = mstSecuencial(&g);
+						}
+						if(rta!=-1 && rta!=aux){
+			  				cerr<<"error me dio mal el AGM"<<endl;
+			  				assert(false);
+			  			}
+			  			rta = aux;
+					}
+		  			std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
+		  			cout << "peso total: " << rta << endl;
+		  			
+		  			double cuantoTarda = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+		  			if (cuantoTarda>0){
+		  				if(z<5){
+		  					tiemposParal.push_back(cuantoTarda);	
+		  				}else{
+		  					tiemposSecu.push_back(cuantoTarda);
+		  				}
+					}else{
+						cerr<<"no tardo nada..."<<endl;
+		  				assert(false);
+					}
+				}
+
+				double accumulateParal=0;
+				double accumulateSecu=0;
+	  			for (std::vector<double>::iterator it = tiemposParal.begin(); it != tiemposParal.end(); ++it)	{
+			  		accumulateParal+= *(it);
+	 		 	}
+	 		 	for (std::vector<double>::iterator it = tiemposSecu.begin(); it != tiemposSecu.end(); ++it)	{
+			  		accumulateSecu+= *(it);
+	 		 	}
+	 		 	double average = accumulateParal/tiemposParal.size();
+				cout<<"Tiempo Paralelo: "<<average<<endl;
+	 		 	average = accumulateSecu/tiemposSecu.size();
+	 		 	cout<<"Tiempo Secuencial: "<<average<<endl;
 	  		}
 	  	}
 
-	  	/*
-		vector<double> tiempos;
-	  	for (int veces = 0; veces < 50; ++veces){
-	  		time_t tInicial, tFinal;
-			time(&tInicial);
-			mstParalelo(&g, cantThreads);
-			time(&tFinal);
-			if (tFinal>tInicial){
-				tiempos.push_back(tFinal-tInicial);
-			}
-			
-	  	}
-	  	double accumulate=0;
-	  	for (std::vector<double>::iterator it = tiempos.begin(); it != tiempos.end(); ++it)	{
-	  		accumulate+= *(it);
-	  	}
-	  	double average = accumulate/tiempos.size();
-	  	cout<<"Tiempo con "<<cantThreads<<" threads: "<<average<<endl;
-		*/
+	  	
+	  	
+	  	
+		
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
 	  }
