@@ -10,6 +10,7 @@
 #include <semaphore.h>
 #include <unistd.h>
 #include <atomic>
+#include <assert.h>
 
 using namespace std;
 
@@ -493,7 +494,7 @@ void *ThreadCicle(void* inThread){
 	pthread_exit(NULL);
 }
 
-void mstParalelo(Grafo *g, int cantThreads) {
+int mstParalelo(Grafo *g, int cantThreads) {
 	//Imprimo el grafo
 	//g->imprimirGrafo();
 
@@ -558,6 +559,7 @@ void mstParalelo(Grafo *g, int cantThreads) {
 	cout << endl << "== RESULTADO == " << endl;
 	cout << "Peso total = " << arbolRta->pesoTotal() << endl;
  	//arbolRta->imprimirGrafo();
+ 	return arbolRta->pesoTotal();
 }
 
 /////////////////////////////////////////////////////////////////7
@@ -594,10 +596,16 @@ int main(int argc, char const * argv[]) {
 	  }
   }else{	
 	  if( g.inicializar(nombre) == 1){
+	  	int rta=-1;
 	  	for (int i = 4; i < g.numVertices-2; i++){
-	  		for(int j = 0; j < 5000; j++){			
+	  		for(int j = 0; j < 500; j++){			
 	  			cout << "nro threads = " << i << "iteracion nro = " << j <<  endl;
-	  			mstParalelo(&g, i);
+	  			int aux = mstParalelo(&g,i);
+	  			if(rta!=-1 && rta!=aux){
+	  				cerr<<"error me dio mal el AGM"<<endl;
+	  				assert(false);
+	  			}
+	  			rta = aux;
 	  		}
 	  	}
 
