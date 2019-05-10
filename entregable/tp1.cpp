@@ -599,13 +599,37 @@ int main(int argc, char const * argv[]) {
   }else{	
 	  if( g.inicializar(nombre) == 1){
 	  	int rta=-1;
-	  	
-	  	for (int i = 4; i < g.numVertices-2; i++){
+
+	  	cout << "nroThreads, iteracion, tiempoParal, tiempoSecu" << endl;
+	  	for (int i = 1; i < g.numVertices; i*=2){
+	  		for(int j = 1; j < 51; j++){
+	  			cout << i << ", " << j <<  ", ";
+	  			for (int z = 0; z < 2; ++z)
+	  			{  	
+	  				int rta;			
+		  			std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+		  			if(z<1){rta = mstParalelo(&g,i);}else{rta = mstSecuencial(&g);}
+		  			std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
+		  			double cuantoTarda = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+		  			if (cuantoTarda>0){
+			  			cout << cuantoTarda << ", ";	
+			  		}else{
+						cerr<<"no tardo nada..."<<endl;
+			  			assert(false);
+					}
+	  			}
+	  			cout << endl;
+	  		}
+	  	}
+
+/*
+	  	for (int i = 1; i < g.numVertices; i*=2){
 	  		vector<double> tiemposParal;
 	  		vector<double> tiemposSecu;
-	  		for(int j = 0; j < 10; j++){			
+	  		for(int j = 0; j < 3; j++){			
 	  			cout << "nro threads = " << i << "iteracion nro = " << j <<  endl;
 	  			
+
 	  			for (int z = 0; z < 10; ++z){
 
 					std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -623,7 +647,7 @@ int main(int argc, char const * argv[]) {
 			  			rta = aux;
 					}
 		  			std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
-		  			cout << "peso total: " << rta << endl;
+		  			//cout << "peso total: " << rta << endl;
 		  			
 		  			double cuantoTarda = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 		  			if (cuantoTarda>0){
@@ -652,11 +676,7 @@ int main(int argc, char const * argv[]) {
 	 		 	cout<<"Tiempo Secuencial: "<<average<<endl;
 	  		}
 	  	}
-
-	  	
-	  	
-	  	
-		
+	*/
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
 	  }
