@@ -164,7 +164,7 @@ double mstSecuencial(Grafo *g){
 
   //cout << endl << "== RESULTADO == " << endl;
   //arbol.imprimirGrafo();
-  return arbol.pesoTotal();
+  return arbol.pesoTotal(g);
 }
 
 /////////////////////////////////////////////////////////////////7
@@ -536,7 +536,7 @@ int mstParalelo(Grafo *g, int cantThreads) {
 
 	//el último thread que queda lo sabe porque no le quedan nodos que agregar
 	// guarda su arbol en un arbolRta compartido
- 	return arbolRta->pesoTotal();
+ 	return arbolRta->pesoTotal(grafoCompartido);
 }
 
 /////////////////////////////////////////////////////////////////7
