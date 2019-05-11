@@ -629,7 +629,8 @@ int main(int argc, char const * argv[]) {
 		  			std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
 		  			double cuantoTarda = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
 		  			if (cuantoTarda>0){
-			  			cout << cuantoTarda << ", ";	
+			  			cout << cuantoTarda;
+			  			if(z<1)cout << ", ";	
 			  		}else{
 						cerr<<"no tardo nada..."<<endl;
 			  			assert(false);
