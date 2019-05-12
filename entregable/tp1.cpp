@@ -356,21 +356,6 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 	return pudeMergearConTid;
 }
 
-void lockConQuienMergeo(int miTid, int otroThread){
-	if (miTid < otroThread){
-		conQuienMergeo->operator[](miTid).first.lock();
-		conQuienMergeo->operator[](otroThread).first.lock();
-	}else{
-		conQuienMergeo->operator[](otroThread).first.lock();
-		conQuienMergeo->operator[](miTid).first.lock();		
-	}
-}
-
-void unlockConQuienMergeo(int miTid, int otroThread){
-	conQuienMergeo->operator[](miTid).first.unlock();
-	conQuienMergeo->operator[](otroThread).first.unlock();
-}
-
 void *ThreadCicle(void* inThread){
 
 	//cada thread tiene su input con tu Tid y su nodo inicial
