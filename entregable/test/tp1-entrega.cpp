@@ -172,7 +172,7 @@ double mstSecuencial(Grafo *g){
 	nodoActual = min_element(distancia.begin(),distancia.end()) - distancia.begin();
   }
   //arbol.imprimirGrafo();
-  return arbol.pesoTotal(g);
+  return arbol.pesoTotal();
 }
 
 /////////////////////////////////////////////////////////////////7
@@ -529,7 +529,7 @@ int mstParalelo(Grafo *g, int cantThreads) {
 	//el último thread que queda lo sabe porque no le quedan nodos que agregar
 	// guarda su arbol en un arbolRta compartido
  	//arbolRta->imprimirGrafo();
- 	return arbolRta->pesoTotal(grafoCompartido);
+ 	return arbolRta->pesoTotal();
 }
 
 /////////////////////////////////////////////////////////////////7
