@@ -382,21 +382,6 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 	return pudeMergearConTid;
 }
 
-void lockConQuienMergeo(int miTid, int otroThread){
-	if (miTid < otroThread){
-		conQuienMergeo->operator[](miTid).first.lock();
-		conQuienMergeo->operator[](otroThread).first.lock();
-	}else{
-		conQuienMergeo->operator[](otroThread).first.lock();
-		conQuienMergeo->operator[](miTid).first.lock();		
-	}
-}
-
-void unlockConQuienMergeo(int miTid, int otroThread){
-	conQuienMergeo->operator[](miTid).first.unlock();
-	conQuienMergeo->operator[](otroThread).first.unlock();
-}
-
 void *ThreadCicle(void* inThread){
 
 	//cada thread tiene su input con tu Tid y su nodo inicial
@@ -614,12 +599,13 @@ int main(int argc, char const * argv[]) {
   }else{	
 	  if( g.inicializar(nombre) == 1){
 	  	int rta=-1;
-
+	  	int i =1;
+	  	int x=151;
+	  	if(g.numVertices>1200){i=8; x=51;}
 	  	cout << "nroThreads, iteracion, tiempoParal, tiempoSecu" << endl;
-	  	int i=1;
-	  	if(g.numVertices>1005){i=8;} //total da mas o menos lo mismo ya vimos y así tarda menos
 	  	for (; i < g.numVertices; i*=2){
-	  		for(int j = 1; j < 11; j++){
+	  		
+	  		for(int j = 1; j < x; j++){
 	  			cout << i << ", " << j <<  ", ";
 	  			for (int z = 0; z < 2; ++z)
 	  			{  	

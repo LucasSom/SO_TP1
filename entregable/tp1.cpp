@@ -557,10 +557,13 @@ int main(int argc, char const * argv[]) {
   }else{	
 	  if( g.inicializar(nombre) == 1){
 	  	int rta=-1;
-
+	  	int i =1;
+	  	int x=151;
+	  	if(g.numVertices>1200){i=8; x=51;}
 	  	cout << "nroThreads, iteracion, tiempoParal, tiempoSecu" << endl;
-	  	for (int i = 1; i < g.numVertices; i*=2){
-	  		for(int j = 1; j < 51; j++){
+	  	for (; i < g.numVertices; i*=2){
+	  		
+	  		for(int j = 1; j < x; j++){
 	  			cout << i << ", " << j <<  ", ";
 	  			for (int z = 0; z < 2; ++z)
 	  			{  	
