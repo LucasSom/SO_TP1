@@ -579,7 +579,7 @@ int main(int argc, char const * argv[]) {
 		}
 
 		cout<<endl<<"Test con "<<nombre<<endl;
-		if (version != "p"){
+		if (version != "s"){
 			cout<<"Cantidad de threads: "<<cantThreads<<endl;
 		}
 		if (test){
