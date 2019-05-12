@@ -60,15 +60,7 @@ void Grafo::incrementarTotalEjes(){
   numEjes += 1;
 }
 
-double Grafo::pesoOriginal(Grafo* original, int i, int j){
-
-  for (vector<Eje>::iterator ejes_iterator = original->listaDeAdyacencias.at(i).begin(); ejes_iterator != original->listaDeAdyacencias.at(i).end(); ++ejes_iterator){
-  //recorre todos los vecinos de i
-     if (ejes_iterator->nodoDestino == j) return ejes_iterator->peso;
-  }
-}
-
-double Grafo::pesoTotal(Grafo *original){
+double Grafo::pesoTotal(){
   // Double por si falla algo y da con coma, pa ver 
   double peso = 0;
 
@@ -76,7 +68,7 @@ double Grafo::pesoTotal(Grafo *original){
     //recorre todos los nodos del arbol
     for (vector<Eje>::iterator it = vecinosBegin(nodo_ptr->first); it != vecinosEnd(nodo_ptr->first); ++it){  
       //recorre los ejes de cada nodo
-      peso += pesoOriginal(original, nodo_ptr->first, it->nodoDestino);
+      peso += it->peso; 
     }
   }
   return peso/2;

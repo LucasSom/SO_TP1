@@ -179,7 +179,7 @@ double mstSecuencial(Grafo *g){
 
   //cout << endl << "== RESULTADO == " << endl;
   //arbol.imprimirGrafo();
-  return arbol.pesoTotal(g);
+  return arbol.pesoTotal();
 }
 
 /////////////////////////////////////////////////////////////////7
@@ -561,7 +561,7 @@ int mstParalelo(Grafo *g, int cantThreads) {
 	//cout << endl << "== RESULTADO == " << endl;
 	//cout << "Peso total = " << arbolRta->pesoTotal() << endl;
  	//arbolRta->imprimirGrafo();
- 	return arbolRta->pesoTotal(grafoCompartido);
+ 	return arbolRta->pesoTotal();
 }
 
 /////////////////////////////////////////////////////////////////7
