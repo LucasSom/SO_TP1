@@ -42,7 +42,6 @@ grafo.o: grafo.h grafo.cpp
 
 clean:
 	rm $(OBJS)
-	rm TP1
 	rm testComp
 	rm testSec
 	rm testPar

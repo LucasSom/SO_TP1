@@ -547,11 +547,13 @@ int main(int argc, char const * argv[]) {
 
   Grafo g;
 
+  double peso;
   if(cantThreads==1){  	
 	  if( g.inicializar(nombre) == 1){
 
+	  	g.imprimirGrafo();
 		//Corro el algoirtmo secuencial de g
-		double peso = mstSecuencial(&g);
+		peso = mstSecuencial(&g);
 
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
@@ -559,14 +561,16 @@ int main(int argc, char const * argv[]) {
   }else{	
 	  if( g.inicializar(nombre) == 1){
 
+	  	g.imprimirGrafo();
 		//Corro el algoirtmo secuencial de g
-		double peso = mstParalelo(&g, cantThreads);
+		peso = mstParalelo(&g, cantThreads);
 
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
 	  }
   }
 
+  cout<<"el peso del AGM es: "<<peso<<endl;
   return 1;
 }
 
