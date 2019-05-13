@@ -432,7 +432,6 @@ void *ThreadCicle(void* inThread){
 				// Libero memoria pedida del rendez-vous
 				delete rendezvous;
 				if (otroThread < miTid){
-					//printf("MUERO Y SOY %d, mori ante %d\n", miTid, otroThread);
 					threadsVivos--;
 					pthread_exit(NULL);
 				}
