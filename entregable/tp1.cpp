@@ -543,7 +543,7 @@ int main(int argc, char const * argv[]) {
 
   string nombre;
   nombre = string(argv[1]);
-  int cantThreads = int(argv[2]);
+  int cantThreads = atoi(argv[2]);
 
   Grafo g;
 
