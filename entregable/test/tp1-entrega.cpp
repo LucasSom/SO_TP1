@@ -309,6 +309,7 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 }
 
 bool chequeoCircular(int miTid, int otroThread){
+	//inicializo booleanos en false
 	bool visitados[nroThreads] = {0};
 	bool termine = false;
 	int esCasoCircular = false;
@@ -317,16 +318,20 @@ bool chequeoCircular(int miTid, int otroThread){
 	while (otroThread != NADIE and !termine){
 		int temp = otroThread;
 		if (visitados[temp]){
+			// si ya lo visite, hay un ciclo
 			if (temp == miTid)
-				esCasoCircular = true;
+				esCasoCircular = true; // volvi a mi mismo. Yo creo el ciclo
 			termine = true;
 		}else{
+			//lo marco como visitado
 			visitados[temp] = true;
+			//navego entre pedidores
 			conQuienMergeo->operator[](temp).first.lock();
 			otroThread = conQuienMergeo->operator[](temp).second;
 			conQuienMergeo->operator[](temp).first.unlock();
 		}
 	}
+	//si llegue a nadie tampoco hay caso circular 
 	return esCasoCircular;
 }
 
@@ -341,12 +346,12 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		colasEspera->operator[](miTid).first.unlock();
 		int tidDelQuePide = rendezvousP->tidDelQuePide;
 
+		//me fijo si encontre el tid pasado por parametro
 		if (tidDelQuePide == tidQueBusco) pudeMergearConTid = true;
 		//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
-		//se que en este momento el thread que me lo pidió está haciendo el merge, porque
-		//estamos en el rendezvous
+		//llamo a merge
 		sumar_arbol(tidDelQuePide, miTid, rendezvousP->nodoFusion, rendezvousP->esPrimerNodo);
 		sem_wait(&rendezvousP->semDePedidor);
 		sem_post(&rendezvousP->semDeCola);
@@ -375,15 +380,17 @@ void *ThreadCicle(void* inThread){
 	Grafo* arbolMio = &(arbolesGenerados[miTid]);
 
 	for(int i = 0; arbolMio->numVertices < grafoCompartido->numVertices; i++){
-		//me aseguro que nadie esté tocando este nodo compartido
+		// Me aseguro que nadie esté tocando este nodo compartido
 
 		permisoNodo->operator[](nodoActual).lock();
-		//si ya estaba pintado me mergeo
+		// Si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
 			int otroThread = colores[nodoActual];
 
+			// Sección crítica donde se chequea si se generan ciclos si soy pedidor.
 			conQuienMergeoPermiso.lock();
 			bool esCasoCircular = chequeoCircular(miTid, otroThread);
+			// Actualizo que pedi merge a otroThread. 
 			conQuienMergeo->operator[](miTid).first.lock();
 			conQuienMergeo->operator[](miTid).second = otroThread;
 			conQuienMergeo->operator[](miTid).first.unlock();
@@ -413,7 +420,7 @@ void *ThreadCicle(void* inThread){
 				
 				sem_post(&rendezvous->semDePedidor);
 				sem_wait(&rendezvous->semDeCola);
-
+				// Destruyo semaforos
 				sem_destroy(&rendezvous->semDePedidor);
 				sem_destroy(&rendezvous->semDeCola);
 
@@ -430,6 +437,8 @@ void *ThreadCicle(void* inThread){
 					pthread_exit(NULL);
 				}
 			}else{
+				// Como es caso circular, si me pusheo genero deadlock. Por eso me quedo esperando a que el otroThread se pushee a mi cola
+				// Libero permiso nodo
 				permisoNodo->operator[](nodoActual).unlock();
 				bool seEncolo = false;
 				while(!seEncolo){
@@ -454,7 +463,7 @@ void *ThreadCicle(void* inThread){
 			//Descubrir vecinos: los pinto y calculo distancias
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
 		}
-		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear
+		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear,  no importa lo que devuelve chequeoColaPorPedidos
 		chequeoColaPorPedidos(miTid, 0);
 
 		//tanto si mergee como si no, tengo que buscar el prox nodoActual
@@ -487,6 +496,7 @@ int mstParalelo(Grafo *g, int cantThreads) {
 	vector<pair<Spinlock, queue<mergeStruct*> > > mutexesesCola(cantThreads);
 	colasEspera = &mutexesesCola;
 
+	//arreglo para saber si el thread i pidio merge con alguien
 	vector<pair <mutex, int> > conQuienMergeoAux(cantThreads);
 	for (int i = 0; i < cantThreads; ++i){
 		conQuienMergeoAux[i].second = NADIE;
