@@ -158,6 +158,7 @@ double mstSecuencial(Grafo *g){
 	nodoActual = min_element(distancia.begin(),distancia.end()) - distancia.begin();
   }
   //arbol.imprimirGrafo();
+  arbol.imprimirGrafo();
   return arbol.pesoTotal();
 }
 
@@ -524,6 +525,7 @@ int mstParalelo(Grafo *g, int cantThreads) {
 	//el último thread que queda lo sabe porque no le quedan nodos que agregar
 	// guarda su arbol en un arbolRta compartido
  	//arbolRta->imprimirGrafo();
+ 	arbolRta->imprimirGrafo();
  	return arbolRta->pesoTotal();
 }
 
@@ -541,57 +543,32 @@ int main(int argc, char const * argv[]) {
 
   string nombre;
   nombre = string(argv[1]);
-  string version = string(argv[2]);
-  int cantThreads = atoi(argv[3]);
+  int cantThreads = int(argv[2]);
 
   Grafo g;
 
-	if( g.inicializar(nombre) == 1){
+  if(cantThreads==1){  	
+	  if( g.inicializar(nombre) == 1){
 
-		int pesoParalelo, pesoSecuencial, pesoFinal;
-		bool test = false;
+		//Corro el algoirtmo secuencial de g
+		double peso = mstSecuencial(&g);
 
-		if (version != "s"){//corremos el paralelo
-  			pesoParalelo = mstParalelo(&g, cantThreads);
-  			pesoFinal = pesoParalelo;
-		}
-		if (version != "p") {//corremos el secuencial
-	  		pesoSecuencial = mstSecuencial(&g);
-	  		pesoFinal = pesoSecuencial;
-		}
-
-		if (version == "a"){//se corrieron ambos
-			/* comparamos sus resultados */
-			test = (pesoSecuencial==pesoParalelo);
-		}else{
-			if (nombre=="simple.txt"){
-				test = (pesoFinal==29);
-			}else if (nombre=="complejo.txt"){
-				test = (pesoFinal==19);
-			}else if (nombre=="trivial.txt"){
-				test = (pesoFinal==3);
-			}
-		}
-
-		cout<<"Test con "<<nombre<<endl;
-		if (version != "s"){
-			cout<<"Cantidad de threads: "<<cantThreads<<endl;
-		}
-		if (test){
-			cout<<"Result: [OK]"<<endl;
-		}else{
-			cout<<"Result: [FAILED]"<<endl;
-		}
-		cout<<endl;
-		
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
 	  }
+  }else{	
+	  if( g.inicializar(nombre) == 1){
 
-  return 0;
+		//Corro el algoirtmo secuencial de g
+		double peso = mstParalelo(&g, cantThreads);
+
+	  }else{
+		cerr << "No se pudo cargar el grafo correctamente" << endl;
+	  }
+  }
+
+  return 1;
 }
-
-
 
 
 
