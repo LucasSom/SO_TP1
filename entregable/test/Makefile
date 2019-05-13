@@ -23,13 +23,12 @@ tests-secuencial: $(OBJS) tp1-entrega.cpp
 
 tests-paralelo: $(OBJS) tp1-entrega.cpp
 	$(CC) $(LFLAGS) $(OBJS) tp1-entrega.cpp -o testPar
-	./testPar trivial.txt p 1
-	./testPar trivial.txt p 2
-	./testPar trivial.txt p 3
-	./testPar simple.txt p 1
-	./testPar simple.txt p 2
-	./testPar simple.txt p 5
-	./testPar simple.txt p 9
+	for number in 1 2 3 ; do \
+    	./testPar trivial.txt p $$number ; \
+	done
+	for (( i = 0; i < 10; i++ )); do \
+		./testPar simple.txt p $$i ; \
+	done
 	./testPar complejo.txt p 1
 	./testPar complejo.txt p 2
 	./testPar complejo.txt p 5

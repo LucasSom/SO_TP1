@@ -578,7 +578,7 @@ int main(int argc, char const * argv[]) {
 			}
 		}
 
-		cout<<endl<<"Test con "<<nombre<<endl;
+		cout<<"Test con "<<nombre<<endl;
 		if (version != "s"){
 			cout<<"Cantidad de threads: "<<cantThreads<<endl;
 		}
@@ -587,7 +587,8 @@ int main(int argc, char const * argv[]) {
 		}else{
 			cout<<"Result: [FAILED]"<<endl;
 		}
-
+		cout<<endl;
+		
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
 	  }
