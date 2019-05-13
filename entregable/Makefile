@@ -7,13 +7,10 @@ LFLAGS=-pthread -std=$(CPP_STANDARD)
 
 OBJS=grafo.o
 
-all: TP1 TP1Spinlock
+all: TP1
 
 TP1: $(OBJS) tp1.cpp
 	$(CC) $(LFLAGS) $(OBJS) tp1.cpp -o TP1
-
-TP1Spinlock: $(OBJS) tp1Spinlock.cpp
-	$(CC) $(LFLAGS) $(OBJS) tp1Spinlock.cpp -o TP1Spinlock
 
 tests-secuencial: $(OBJS) tp1-entrega.cpp
 	$(CC) $(LFLAGS) $(OBJS) tp1-entrega.cpp -o testSec

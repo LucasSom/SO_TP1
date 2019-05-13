@@ -66,6 +66,7 @@ typedef struct mergeStruct {
 
 } mergeStruct;
 
+
 //colasEspera[i] es la cola en la que el thread i ve si alguien pidió un merge
 //colasEspera[i] también tiene un mutex para que la cola no se rompa por la concurrencia
 vector< pair<mutex, queue<mergeStruct*> > >* colasEspera;
@@ -127,10 +128,6 @@ void pintarVecinos(Grafo *g, int num){
 }
 
 double mstSecuencial(Grafo *g){
-  //Imprimo el grafo
-  //g->imprimirGrafo();
-
-  //INICIALIZO
   //Semilla random
   srand(time(0));
   //Arbol resultado
@@ -143,7 +140,6 @@ double mstSecuencial(Grafo *g){
 
   //Selecciono un nodo al azar del grafo para empezar
   int nodoActual = rand() % g->numVertices;
-  //int nodoActual = 0;
   for(int i = 0; i < g->numVertices; i++){
 	arbol.numVertices += 1;
 
@@ -161,8 +157,6 @@ double mstSecuencial(Grafo *g){
 	//Busco el nodo más cercano que no esté en el árbol, pero sea alcanzable
 	nodoActual = min_element(distancia.begin(),distancia.end()) - distancia.begin();
   }
-
-  //cout << endl << "== RESULTADO == " << endl;
   //arbol.imprimirGrafo();
   return arbol.pesoTotal();
 }
@@ -277,7 +271,7 @@ void sumar_arbol(int tidDelQuePide, int tidCola, int nodoActual, bool esPrimerNo
 		original->insertarEje(nodoActual,distanciaNodoParal[tidDelQuePide][nodoActual],distanciaParal[tidDelQuePide][nodoActual]);
 	}
 
-	//cada thread tiene su vector de colores (BLANCO,GRIS,NEGRO) para saber cuales distancias ya calculó
+	//cada thread tiene su vector de colores (BLANCO,GRIS,NEGRO) para saber cuales distancias ya calculo
 	//como el secuencial. Copiamos todos los colores y distancias del thread que muere al otro
 	actualizarLogicaColores(miTid, tidAMorir);
 
@@ -343,7 +337,6 @@ bool chequeoColaPorPedidos(int miTid, int tidQueBusco){
 		//hago rendezvous para que el otro thread (o yo) no muera hasta que me mergee con el
 		sem_post(&rendezvousP->semDeCola);
 		sem_wait(&rendezvousP->semDePedidor);
-
 		//llamo a merge
 		sumar_arbol(tidDelQuePide, miTid, rendezvousP->nodoFusion, rendezvousP->esPrimerNodo);
 		sem_wait(&rendezvousP->semDePedidor);
@@ -373,7 +366,8 @@ void *ThreadCicle(void* inThread){
 	Grafo* arbolMio = &(arbolesGenerados[miTid]);
 
 	for(int i = 0; arbolMio->numVertices < grafoCompartido->numVertices; i++){
-		//me aseguro que nadie esté tocando este nodo compartido
+		// Me aseguro que nadie esté tocando este nodo compartido
+
 		permisoNodo->operator[](nodoActual).lock();
 		// Si ya estaba pintado me mergeo
 		if(colores[nodoActual]!=BLANCO){
@@ -395,7 +389,7 @@ void *ThreadCicle(void* inThread){
 				// Si es la primera iteracion, no pinte ningun nodo
 				rendezvous->esPrimerNodo = i == 0;
 
-				//Inicializamos los semaforos en cero
+				//Inicializamos los semaforos en 0
 				sem_init(&rendezvous->semDeCola, SHARED_SEM, 0);
 				sem_init(&rendezvous->semDePedidor, SHARED_SEM, 0);
 
@@ -454,7 +448,7 @@ void *ThreadCicle(void* inThread){
 			//Descubrir vecinos: los pinto y calculo distancias
 			pintarVecinosParalelo(arbolMio,nodoActual, miTid);
 		}
-		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear, no importa lo que devuelve chequeoColaPorPedidos
+		//el thread "miTid" chequea su cola a ver si alguien se quiere mergear,  no importa lo que devuelve chequeoColaPorPedidos
 		chequeoColaPorPedidos(miTid, 0);
 
 		//tanto si mergee como si no, tengo que buscar el prox nodoActual
@@ -471,7 +465,6 @@ void *ThreadCicle(void* inThread){
 }
 
 int mstParalelo(Grafo *g, int cantThreads) {
-
 	//Semilla random
 	srand(time(0));
 
@@ -505,14 +498,13 @@ int mstParalelo(Grafo *g, int cantThreads) {
 
 	//estas son las structs que le pasamos a cada thread
 	vector<inputThread> inputs(cantThreads);
-	//inputs.assign(cantThreads, defecto); //le hacemos un constructor por defecto a la struct?
 
 	//sabemos que queremos un arbol para que genere cada thread
 	arbolesGenerados.assign(cantThreads, Grafo());
 	//LANZAR LOS THREADS
 	for (int tid = 0; tid < cantThreads; ++tid){
 
-		//le pasamos a cada thread su numero de hijo(no el posta del SO, el nuestro)
+		//le pasamos a cada thread su numero de hijo (no el que le asigno el SO, sino el nuestro)
 		inputs[tid].threadId = tid;
 		inputs[tid].nodoInicialRandom = rand() % g->numVertices;
 
@@ -525,8 +517,13 @@ int mstParalelo(Grafo *g, int cantThreads) {
         pthread_join(thread[x], NULL);
     }
 
+	//podríamos agregar que imprima el tiempo que tardó para medirlo,
+	//o que lo guarde en algún archivo junto con el tamaño del grafo
+	//y cosas así
+
 	//el último thread que queda lo sabe porque no le quedan nodos que agregar
 	// guarda su arbol en un arbolRta compartido
+ 	//arbolRta->imprimirGrafo();
  	return arbolRta->pesoTotal();
 }
 
@@ -544,113 +541,54 @@ int main(int argc, char const * argv[]) {
 
   string nombre;
   nombre = string(argv[1]);
-  int cantThreads = atoi(argv[2]);
+  string version = string(argv[2]);
+  int cantThreads = atoi(argv[3]);
 
   Grafo g;
 
-  if(cantThreads==1){  	
-	  if( g.inicializar(nombre) == 1){
+	if( g.inicializar(nombre) == 1){
 
-	  	//TO DO, para los tests igual creo que estaría bueno justamente compara el paralelo(g,1) con el secuencial(g)
-	  	//o comparar con el secuencial, no siempre con el paralelo
+		int pesoParalelo, pesoSecuencial, pesoFinal;
+		bool test = false;
 
-		//Corro el algoirtmo secuencial de g
-		mstParalelo(&g, cantThreads);
+		if (version != "s"){//corremos el paralelo
+  			pesoParalelo = mstParalelo(&g, cantThreads);
+  			pesoFinal = pesoParalelo;
+		}
+		if (version != "p") {//corremos el secuencial
+	  		pesoSecuencial = mstSecuencial(&g);
+	  		pesoFinal = pesoSecuencial;
+		}
 
+		if (version == "a"){//se corrieron ambos
+			/* comparamos sus resultados */
+			test = (pesoSecuencial==pesoParalelo);
+		}else{
+			if (nombre=="simple.txt"){
+				test = (pesoFinal==29);
+			}else if (nombre=="complejo.txt"){
+				test = (pesoFinal==19);
+			}else if (nombre=="trivial.txt"){
+				test = (pesoFinal==3);
+			}
+		}
+
+		cout<<"Test con "<<nombre<<endl;
+		if (version != "s"){
+			cout<<"Cantidad de threads: "<<cantThreads<<endl;
+		}
+		if (test){
+			cout<<"Result: [OK]"<<endl;
+		}else{
+			cout<<"Result: [FAILED]"<<endl;
+		}
+		cout<<endl;
+		
 	  }else{
 		cerr << "No se pudo cargar el grafo correctamente" << endl;
 	  }
-  }else{	
-	  if( g.inicializar(nombre) == 1){
-	  	int rta=-1;
-	  	int i =1;
-	  	int x=151;
-	  	if(g.numVertices>1200){i=8; x=51;}
-	  	cout << "nroThreads, iteracion, tiempoParal, tiempoSecu" << endl;
-	  	for (; i < g.numVertices; i*=2){
-	  		
-	  		for(int j = 1; j < x; j++){
-	  			cout << i << ", " << j <<  ", ";
-	  			for (int z = 0; z < 2; ++z)
-	  			{  	
-	  				int rta;			
-		  			std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-		  			if(z<1){rta = mstParalelo(&g,i);}else{rta = mstSecuencial(&g);}
-		  			std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
-		  			double cuantoTarda = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-		  			if (cuantoTarda>0){
-			  			cout << cuantoTarda;
-			  			if(z<1)cout << ", ";	
-			  		}else{
-						cerr<<"no tardo nada..."<<endl;
-			  			assert(false);
-					}
-	  			}
-	  			cout << endl;
-	  		}
-	  	}
 
-/*
-	  	for (int i = 1; i < g.numVertices; i*=2){
-	  		vector<double> tiemposParal;
-	  		vector<double> tiemposSecu;
-	  		for(int j = 0; j < 3; j++){			
-	  			cout << "nro threads = " << i << "iteracion nro = " << j <<  endl;
-	  			
-
-	  			for (int z = 0; z < 10; ++z){
-
-					std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-					for (int x = 0; x < 5; ++x){
-						int aux;
-						if(z<5){
-							aux = mstParalelo(&g,i);	
-						}else{
-							aux = mstSecuencial(&g);
-						}
-						if(rta!=-1 && rta!=aux){
-			  				cerr<<"error me dio mal el AGM"<<endl;
-			  				assert(false);
-			  			}
-			  			rta = aux;
-					}
-		  			std::chrono::steady_clock::time_point end= std::chrono::steady_clock::now();
-		  			//cout << "peso total: " << rta << endl;
-		  			
-		  			double cuantoTarda = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
-		  			if (cuantoTarda>0){
-		  				if(z<5){
-		  					tiemposParal.push_back(cuantoTarda);	
-		  				}else{
-		  					tiemposSecu.push_back(cuantoTarda);
-		  				}
-					}else{
-						cerr<<"no tardo nada..."<<endl;
-		  				assert(false);
-					}
-				}
-
-				double accumulateParal=0;
-				double accumulateSecu=0;
-	  			for (std::vector<double>::iterator it = tiemposParal.begin(); it != tiemposParal.end(); ++it)	{
-			  		accumulateParal+= *(it);
-	 		 	}
-	 		 	for (std::vector<double>::iterator it = tiemposSecu.begin(); it != tiemposSecu.end(); ++it)	{
-			  		accumulateSecu+= *(it);
-	 		 	}
-	 		 	double average = accumulateParal/tiemposParal.size();
-				cout<<"Tiempo Paralelo: "<<average<<endl;
-	 		 	average = accumulateSecu/tiemposSecu.size();
-	 		 	cout<<"Tiempo Secuencial: "<<average<<endl;
-	  		}
-	  	}
-	*/
-	  }else{
-		cerr << "No se pudo cargar el grafo correctamente" << endl;
-	  }
-  }
-
-  return 1;
+  return 0;
 }
 
 
